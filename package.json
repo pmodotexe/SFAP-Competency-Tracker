@@ -10,6 +10,7 @@
     "import-competencies": "node scripts/import-competencies.js",
     "excel-to-json": "node scripts/excel-to-json.js",
     "deploy:github": "node scripts/deploy-github-pages.js",
+    "deploy:heroku": "node scripts/deploy-heroku.js",
     "build": "npm run build:client",
     "build:client": "echo 'Client build complete'",
     "test": "echo \"Error: no test specified\" && exit 1"

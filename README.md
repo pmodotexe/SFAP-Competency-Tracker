@@ -98,22 +98,50 @@ Your Excel file should have columns for:
 
 ## Deployment
 
-### Option 1: Heroku
+### Option 1: Heroku (Automated)
 
-1. **Create a Heroku app**
+The easiest way to deploy to Heroku is using our automated deployment script:
+
+```bash
+# Quick deployment with default app name
+npm run deploy:heroku
+
+# Or specify a custom app name
+node scripts/deploy-heroku.js your-custom-app-name
+```
+
+This script will:
+- Check for Heroku CLI installation
+- Create the Heroku app
+- Set environment variables
+- Deploy the code
+- Set up the database
+- Provide the app URL
+
+For detailed instructions and manual deployment, see [`HEROKU_DEPLOYMENT.md`](HEROKU_DEPLOYMENT.md).
+
+### Option 1b: Heroku (Manual)
+
+1. **Install Heroku CLI and login**
+   ```bash
+   heroku login
+   ```
+
+2. **Create a Heroku app**
    ```bash
    heroku create your-app-name
    ```
 
-2. **Set environment variables**
+3. **Set environment variables**
    ```bash
    heroku config:set NODE_ENV=production
    heroku config:set SESSION_SECRET=your-production-secret
    ```
 
-3. **Deploy**
+4. **Deploy**
    ```bash
    git push heroku main
+   heroku run npm run setup
    ```
 
 ### Option 2: Railway
