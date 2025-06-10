@@ -88,7 +88,7 @@ heroku builds:create --source-tar app.tar.gz
 #### 7. Set up the database and import competencies
 
 ```bash
-heroku run npm run setup:production
+heroku run "npm run setup:production" --app your-app-name
 ```
 
 This single command will:

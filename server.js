@@ -12,6 +12,11 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy for Heroku
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
+
 // Database setup
 const dbPath = path.join(__dirname, 'data', 'competency_tracker.db');
 const dataDir = path.join(__dirname, 'data');
@@ -59,7 +64,7 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: false, // Set to false for now to fix Heroku issues
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
