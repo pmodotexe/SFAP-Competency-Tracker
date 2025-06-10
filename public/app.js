@@ -779,7 +779,8 @@ async function generateReportElement(isBlankForm = false) {
                 if (signatureData) {
                     signatureContent = `<img src="${signatureData}" alt="Signature" style="max-height: 30px; max-width: 100px;">`;
                 } else if (rating !== null) {
-                    signatureContent = `<span style="font-style: italic; color: #555;">[Validated]</span>`;
+                    // For print, show actual signature or leave blank if no signature available
+                    signatureContent = '';
                 }
 
                 const trHtml = `<tr>
