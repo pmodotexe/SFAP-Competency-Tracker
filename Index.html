@@ -1,0 +1,1410 @@
+<!--
+   – Author: -Paolo M.- 
+   – OS support: -Reliability Solutions-
+   – Description: A competency tracker for apprentices, with mentor sign-off, dashboard, search, and filters.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saw Filer Apprenticeship Program Competency Tracker (ETA671)</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+    <script src="https://unpkg.com/@popperjs/core@2/dist/umd/popper.min.js"></script>
+    <script src="https://unpkg.com/tippy.js@6/dist/tippy.umd.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/dist/tippy.css"/>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <style>
+        /* --- NEW: Animated Background --- */
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .gradient-background {
+            --size: 750px;
+            --speed: 50s;
+            --easing: cubic-bezier(0.8, 0.2, 0.2, 0.8);
+            width: var(--size);
+            height: var(--size);
+            filter: blur(calc(var(--size) / 5));
+            background-image: linear-gradient(hsl(222, 84%, 60%, 100%), hsl(164, 79%, 71%));
+            animation: rotate var(--speed) var(--easing) alternate infinite;
+            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            overflow: hidden;
+        }
+        @media (min-width: 720px) {
+            .gradient-background { --size: 500px; }
+        }
+        body {
+            background-color: #f3f4f6; /* Fallback for no gradient support or to be overridden */
+        }
+        #app {
+            position: relative;
+            z-index: 1;
+        }
+        /* --- End New Styles --- */
+
+        .signature-pad-container { position: relative; width: 100%; max-width: 400px; height: 200px; border: 1px solid #d1d5db; border-radius: 0.375rem; margin-bottom: 10px; touch-action: none; overflow: hidden; margin-left: auto; margin-right: auto;}
+        .signature-pad-container canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #f9fafb; cursor: crosshair; border-radius: 0.375rem; }
+        .hidden { display: none !important; }
+        .competency-list::-webkit-scrollbar { width: 8px; }
+        .competency-list::-webkit-scrollbar-track { background: #f3f4f6; border-radius: 10px; }
+        .competency-list::-webkit-scrollbar-thumb { background: #9ca3af; border-radius: 10px; }
+        .competency-list::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        .loader-small { border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid white; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; display: inline-block; }
+        .input-style { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out; appearance: none; background-color: #fff; font-size: 1rem; line-height: 1.5rem; }
+        .input-style:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25); }
+        .input-style.error { border-color: #ef4444; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .tippy-box[data-theme~='custom-light'] { background-color: #f3f4f6; color: #1f2937; border: 1px solid #d1d5db; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .tippy-box[data-theme~='custom-light'][data-placement^='top'] > .tippy-arrow::before { border-top-color: #d1d5db; }
+        .tippy-box[data-theme~='custom-light'][data-placement^='bottom'] > .tippy-arrow::before { border-bottom-color: #d1d5db; }
+
+        .modal-backdrop { background-color: rgba(0, 0, 0, 0.6); }
+        .modal-content { max-height: 90vh; overflow-y: auto; }
+
+        .status-tag {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px; 
+            height: 24px;
+            border-radius: 50%;
+            font-size: 14px; 
+            font-weight: bold;
+            margin-right: 8px;
+            flex-shrink: 0;
+            line-height: 1; 
+        }
+        .status-pending { background-color: #e5e7eb; color: #4b5563; } 
+        .status-viewed { background-color: #dbeafe; color: #1d4ed8; } 
+        .status-selfRated { background-color: #fef9c3; color: #ca8a04; } 
+        .status-ready { background-color: #ffedd5; color: #c2410c; } 
+        .status-reviewed { background-color: #dcfce7; color: #16a34a; } 
+
+        .self-rating-label { display: inline-block; padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 9999px; cursor: pointer; transition: all 0.2s ease-in-out; margin-right: 8px; margin-bottom: 8px; }
+        .self-rating-label:hover { background-color: #f3f4f6; }
+        .self-rating-input:checked + .self-rating-label { background-color: #3b82f6; color: white; border-color: #2563eb; }
+        .self-rating-input { position: absolute; opacity: 0; pointer-events: none; } 
+
+        #competency-detail-modal { z-index: 50; } 
+
+        .filter-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #d1d5db;
+            background-color: #ffffff;
+            color: #374151;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .filter-btn:hover {
+            background-color: #f3f4f6;
+        }
+        .filter-btn.active {
+            background-color: #3b82f6;
+            color: #ffffff;
+            border-color: #2563eb;
+        }
+        @keyframes flash-green {
+            0% { background-color: #dcfce7; }
+            50% { background-color: #a7f3d0; }
+            100% { background-color: transparent; }
+        }
+        .flash-update {
+            animation: flash-green 1.5s ease-out;
+        }
+
+        /* New Loader Styles */
+        .pl {
+            margin: auto;
+            width: 128px;
+            height: 128px;
+        }
+        .pl__ring, .pl__drop, .pl__drop-inner, .pl__pan, .pl__shadow {
+            animation: pan 2s cubic-bezier(0.65,0,0.35,1) infinite;
+        }
+        .pl__ring {
+            animation-name: flip-ring;
+        }
+        .pl__drop, .pl__drop-inner {
+            animation-timing-function: cubic-bezier(0.33,0.84,0.67,0.84);
+        }
+        .pl__drop--1 { animation-name: drop-1; transform-origin: 13px 60px; }
+        .pl__drop--1 .pl__drop-inner { animation-name: drop-1-inner; }
+        .pl__drop--2 { animation-name: drop-2; transform-origin: 13px 60px; }
+        .pl__drop--2 .pl__drop-inner { animation-name: drop-2-inner; }
+        .pl__drop--3 { animation-name: drop-3; transform-origin: 67px 72px; }
+        .pl__drop--3 .pl__drop-inner { animation-name: drop-3-inner; }
+        .pl__drop--4 { animation-name: drop-4; transform-origin: 67px 72px; }
+        .pl__drop--4 .pl__drop-inner { animation-name: drop-4-inner; }
+        .pl__drop--5 { animation-name: drop-5; transform-origin: 67px 72px; }
+        .pl__drop--5 .pl__drop-inner { animation-name: drop-5-inner; }
+        .pl__pan { transform-origin: 36px 74px; }
+        .pl__shadow { animation-name: pan-shadow; transform-origin: 36px 124.5px; }
+
+        @keyframes drop-1 { from, 30% { transform: translate(0,0); visibility: visible; } 50%, to { transform: translate(-6px,0); } }
+        @keyframes drop-1-inner { from, 30% { fill: hsla(223,10%,70%,1); transform: translate(0,0); } 50%, to { fill: hsla(223,10%,70%,0); transform: translate(0,-27px); } }
+        @keyframes drop-2 { from, 30% { transform: translate(0,0); visibility: visible; } 50%, to { transform: translate(-8px,0); } }
+        @keyframes drop-2-inner { from, 30% { fill: hsla(223,10%,70%,1); transform: translate(0,0); } 50%, to { fill: hsla(223,10%,70%,0); transform: translate(0,-9px); } }
+        @keyframes drop-3 { from, 78% { transform: translate(0,0); visibility: visible; } 98%, to { transform: translate(-24px,0); } }
+        @keyframes drop-3-inner { from, 78% { fill: hsla(223,10%,70%,1); transform: translate(0,0); } 98%, to { fill: hsla(223,10%,70%,0); transform: translate(0,-28px); } }
+        @keyframes drop-4 { from, 78% { transform: translate(0,0); visibility: visible; } 98%, to { transform: translate(-8px,0); } }
+        @keyframes drop-4-inner { from, 78% { fill: hsla(223,10%,70%,1); transform: translate(0,0); } 98%, to { fill: hsla(223,10%,70%,0); transform: translate(0,-36px); } }
+        @keyframes drop-5 { from, 78% { transform: translate(0,0); visibility: visible; } 98%, to { transform: translate(8px,0); } }
+        @keyframes drop-5-inner { from, 78% { fill: hsla(223,10%,70%,1); transform: translate(0,0); } 98%, to { fill: hsla(223,10%,70%,0); transform: translate(0,-32px); } }
+        @keyframes flip-ring { from, 27% { stroke-dashoffset: 20; stroke-width: 4px; } 53.5% { stroke-dashoffset: -100; stroke-width: 10px; } 80%, to { stroke-dashoffset: -220; stroke-width: 4px; } }
+        @keyframes pan { from, 88%, to { transform: translate(0,0) rotate(0); } 20% { transform: translate(-5px,0) rotate(-30deg); } 30% { transform: translate(0,0) rotate(20deg); } 60%, 78% { transform: translate(0,0) rotate(0); } 81.33% { transform: translate(0,4px) rotate(0); } 84.67% { transform: translate(0,-2px) rotate(0); } }
+        @keyframes pan-shadow { from, 88%, to { fill: hsla(223,10%,50%,0.2); transform: scaleX(1); } 20% { fill: hsla(223,10%,50%,0.2); transform: scaleX(0.77); } 30% { fill: hsla(223,10%,50%,0.2); transform: scaleX(1); } 60%, 78% { fill: hsla(223,10%,50%,0.2); transform: scaleX(1); } 81.33% { fill: hsla(223,10%,50%,0.25); transform: scaleX(0.87); } 84.67% { fill: hsla(223,10%,50%,0.225); transform: scaleX(1.065); } }
+
+        @media print {
+            body { margin: 20px; font-size: 10pt; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            header, main > *:not(#report-view), #loading, #error-message, #success-message,
+            #login-view, #register-view, #forgot-password-view, #apprentice-dashboard,
+            #competency-detail-modal, footer,
+            [data-tippy-root] 
+            { display: none !important; }
+
+            #report-view { display: block !important; margin: 0; padding: 0; }
+
+            #report-header { display: flex !important; justify-content: space-between !important; align-items: center !important; margin-bottom: 15px !important; border-bottom: 1px solid #999 !important; padding-bottom: 8px !important;}
+            #report-header .logos-left, #report-header .logos-right {  }
+            #report-header img { max-height: 35px !important; display: block !important; }
+            #report-header h1 { display: none !important; } 
+
+            #report-job-info { margin-bottom: 15px; font-size: 10pt; display: block !important; }
+            #report-job-info h2 { font-size: 12pt; font-weight: bold; text-align: center; margin-bottom: 5px; }
+            #report-job-info p { text-align: center; margin-bottom: 8px; }
+            #report-job-info .codes { text-align: center; font-weight: bold; margin-bottom: 10px; }
+
+            #report-rating-info { margin-bottom: 15px; display: block !important; }
+            #report-rating-info h4 { font-weight: bold; margin-bottom: 5px; }
+            #report-rating-info table { width: 100%; font-size: 8pt; border-collapse: collapse; }
+            #report-rating-info th, #report-rating-info td { border: 1px solid #ccc; padding: 3px 5px; text-align: left; }
+            #report-rating-info th { background-color: #f2f2f2 !important; }
+            #report-rating-info td:last-child { text-align: center; font-weight: bold; }
+
+            #report-user-info { border: 1px solid #ccc; padding: 10px; margin-bottom: 20px; font-size: 11pt; }
+            #report-user-info dl div { margin-bottom: 3px;}
+            #report-user-info dt { font-weight: bold; display: inline-block; width: 80px; }
+            #report-user-info dd { display: inline-block; margin-left: 10px; }
+            #report-user-info dd.blank-field { border-bottom: 1px dotted #666; min-width: 200px; display: inline-block; height: 1.2em; vertical-align: bottom;}
+
+            .report-category-section { margin-bottom: 20px; page-break-inside: avoid; }
+            .report-category-title { font-size: 13pt; font-weight: bold; border-bottom: 2px solid #666; padding-bottom: 3px; margin-bottom: 8px; }
+            .report-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 9pt; table-layout: fixed; } 
+            .report-table th, .report-table td { border: 1px solid #ccc; padding: 4px 6px; text-align: left; vertical-align: top; word-wrap: break-word; } 
+            .report-table th { background-color: #f2f2f2 !important; font-weight: bold; }
+
+            .report-table th.task, .report-table td.task { width: 45%; } 
+            .report-table th.mentor-rating, .report-table td.mentor-rating,
+            .report-table th.mentor-rating-blank, .report-table td.mentor-rating-blank { width: 15%; text-align: center; font-weight: bold; } 
+            .report-table th.date, .report-table td.date,
+            .report-table th.date-blank, .report-table td.date-blank { width: 15%; white-space: nowrap; } 
+            .report-table th.signature, .report-table td.signature,
+            .report-table th.signature-blank, .report-table td.signature-blank { width: 25%; } 
+
+            .report-table td.mentor-rating, .report-table td.date, .report-table td.signature,
+            .report-table td.mentor-rating-blank, .report-table td.date-blank, .report-table td.signature-blank { min-height: 25px; } 
+
+            .report-table td.signature img { max-height: 30px; max-width: 100px; display: block; margin-top: 2px; }
+            .report-table td.signature span { font-style: italic; color: #555; }
+
+            #report-summary { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="app" class="container mx-auto p-4 max-w-7xl min-h-screen flex flex-col">
+
+         <header class="bg-slate-800 text-white p-4 rounded-lg shadow-md mb-6 flex flex-wrap justify-between items-center gap-y-3 gap-x-4">
+             <div class="flex items-center space-x-4 flex-grow min-w-0"> 
+                 <img src="https://lh5.googleusercontent.com/vpEgLO46q82mzivITnKHOHJPVUd4vRQjFEbac7ebqFpRfXpaPbzmWuGNQO52xFHIoVH6i3x5fDLavK9BPI_-lEbuQYw5lzVnJnTyxYFE7W3gZIC10HEaUNaBzHB9emSE8JGwgV8seg=w1280" alt="Program Logo" class="h-10 w-10">
+                 <h1 class="text-lg sm:text-2xl font-bold">Saw Filer Apprenticeship Program<span class="block text-sm font-normal">Competency Tracker (ETA671)</span></h1> 
+             </div>
+             <div id="user-info" class="hidden text-right text-sm sm:text-base flex-shrink-0">
+                 <span id="user-name" class="block font-semibold"></span>
+                 <span id="user-details" class="block text-xs text-gray-300"></span>
+                 <button id="logout-button" class="mt-1 text-sm text-blue-300 hover:text-white underline focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1">Logout</button>
+             </div>
+         </header>
+
+        <main class="flex-grow">
+            <div id="loading" class="hidden fixed inset-0 bg-gray-400 bg-opacity-50 flex items-center justify-center z-[100]">
+                <svg class="pl" viewBox="0 0 128 128" width="128px" height="128px" role="img" aria-label="A pan being used to flip a blob resembling bacon as it splashes drops of grease in and out">
+                    <clipPath id="pan-clip">
+                        <rect rx="12" ry="14" x="4" y="52" width="68" height="28" />
+                    </clipPath>
+                    <defs>
+                        <linearGradient id="pl-grad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#000" />
+                            <stop offset="100%" stop-color="#fff" />
+                        </linearGradient>
+                        <mask id="pl-mask">
+                            <rect x="0" y="0" width="88" height="80" fill="url(#pl-grad)" />
+                        </mask>
+                    </defs>
+                    <g fill="currentColor">
+                        <g fill="none" stroke-dasharray="20 221" stroke-dashoffset="20" stroke-linecap="round" stroke-width="4">
+                            <g stroke="hsl(38,90%,50%)">
+                                <circle class="pl__ring" cx="44" cy="40" r="35" transform="rotate(90,44,40)" />
+                            </g>
+                            <g stroke="hsl(8,90%,40%)" mask="url(#pl-mask)">
+                                <circle class="pl__ring" cx="44" cy="40" r="35" transform="rotate(90,44,40)" />
+                            </g>
+                        </g>
+                        <g fill="hsla(223,10%,70%,0)">
+                            <g class="pl__drop pl__drop--1">
+                                <circle class="pl__drop-inner" cx="13" cy="60" r="2" />
+                            </g>
+                            <g class="pl__drop pl__drop--2">
+                                <circle class="pl__drop-inner" cx="13" cy="60" r="2" />
+                            </g>
+                            <g class="pl__drop pl__drop--3">
+                                <circle class="pl__drop-inner" cx="67" cy="72" r="2" />
+                            </g>
+                            <g class="pl__drop pl__drop--4">
+                                <circle class="pl__drop-inner" cx="67" cy="72" r="2" />
+                            </g>
+                            <g class="pl__drop pl__drop--5">
+                                <circle class="pl__drop-inner" cx="67" cy="72" r="2" />
+                            </g>
+                        </g>
+                        <g class="pl__pan">
+                            <rect rx="2" ry="2" x="4" y="66" width="68" height="14" clip-path="url(#pan-clip)" id="pan" />
+                            <rect rx="2" ry="2" x="76" y="66" width="48" height="7" />
+                        </g>
+                        <rect class="pl__shadow" fill="hsla(223,10%,50%,0.2)" rx="3.5" ry="3.5" x="10" y="121" width="60" height="7" />
+                    </g>
+                </svg>
+            </div>
+            <div class="max-w-md mx-auto mb-4">
+                <div id="error-message" class="hidden bg-red-100 border-l-4 border-red-500 text-red-700 p-3 rounded shadow" role="alert">
+                    <p class="font-bold">Error!</p>
+                    <p id="error-text" class="text-sm"></p>
+                </div>
+                <div id="success-message" class="hidden bg-green-100 border-l-4 border-green-500 text-green-700 p-3 rounded shadow" role="alert">
+                    <p id="success-text" class="text-sm"></p>
+                </div>
+            </div>
+
+             <div id="login-view" class="bg-white p-6 sm:p-8 rounded-lg shadow-lg max-w-md mx-auto">
+                 <h2 class="text-2xl font-semibold mb-6 text-center text-gray-700">Login</h2>
+                 <form id="login-form" novalidate class="space-y-4">
+                     <div>
+                         <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                         <input type="email" id="email" name="email" required autocomplete="email" class="input-style">
+                     </div>
+                     <div>
+                         <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                         <input type="password" id="password" name="password" required autocomplete="current-password" class="input-style">
+                     </div>
+                     <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition !mt-6">Login</button>
+                 </form>
+                 <div class="mt-4 text-center text-sm"><a href="#" id="show-register-link" class="font-medium text-blue-600 hover:text-blue-500">Don't have an account? Register</a></div>
+                 <div class="mt-2 text-center text-sm"><a href="#" id="show-forgot-password-link" class="font-medium text-gray-600 hover:text-gray-500">Forgot Password?</a></div>
+             </div>
+
+             <div id="register-view" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg max-w-lg mx-auto">
+                 <h2 class="text-2xl font-semibold mb-4 text-center text-gray-700">Register New Account</h2>
+                 <p class="text-xs text-center text-red-600 mb-4 font-medium">Note: Use a unique password. Passwords are not stored securely.</p>
+                 <form id="register-form" novalidate>
+                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                         <div> <label for="reg-firstName" class="block text-sm font-medium text-gray-700 mb-1">First Name</label> <input type="text" id="reg-firstName" required class="input-style"> </div>
+                         <div> <label for="reg-lastName" class="block text-sm font-medium text-gray-700 mb-1">Last Name</label> <input type="text" id="reg-lastName" required class="input-style"> </div>
+                     </div>
+                     <div class="mb-4"> <label for="reg-email" class="block text-sm font-medium text-gray-700 mb-1">Email</label> <input type="email" id="reg-email" required autocomplete="email" class="input-style"> </div>
+                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                         <div> <label for="reg-cohort" class="block text-sm font-medium text-gray-700 mb-1">Cohort</label> <input type="text" id="reg-cohort" required class="input-style"> </div>
+                         <div> <label for="reg-company" class="block text-sm font-medium text-gray-700 mb-1">Company</label> <input type="text" id="reg-company" required class="input-style"> </div>
+                     </div>
+                     <div class="mb-4"> <label for="reg-password" class="block text-sm font-medium text-gray-700 mb-1">Password (min. 6)</label> <input type="password" id="reg-password" required minlength="6" autocomplete="new-password" class="input-style"> </div>
+                     <div class="mb-6"> <label for="reg-confirmPassword" class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label> <input type="password" id="reg-confirmPassword" required minlength="6" autocomplete="new-password" class="input-style"> </div>
+                     <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition">Register</button>
+                 </form>
+                 <div class="mt-4 text-center text-sm"> <a href="#" id="back-to-login-link-reg" class="font-medium text-blue-600 hover:text-blue-500">Already have an account? Login</a> </div>
+             </div>
+
+             <div id="forgot-password-view" class="hidden bg-white p-6 sm:p-8 rounded-lg shadow-lg max-w-md mx-auto text-center">
+                 <h2 class="text-xl font-semibold mb-4 text-gray-700">Forgot Password</h2>
+                 <p class="text-gray-600 mb-6"> Password reset requires administrator assistance. Please contact your program administrator or lead mentor. </p>
+                 <div class="mt-6 text-center text-sm"> <a href="#" id="back-to-login-link-forgot" class="font-medium text-blue-600 hover:text-blue-500">Back to Login</a> </div>
+             </div>
+
+            <div id="apprentice-dashboard" class="hidden">
+                <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
+                    <h2 class="text-xl font-semibold text-gray-800">My Competencies</h2>
+                    <div class="flex space-x-2">
+                        <button id="print-report-button" class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded shadow focus:outline-none focus:ring-2 focus:ring-gray-400" disabled title="Print or Save as PDF">
+                            <i class="fas fa-print mr-1"></i> Print Form
+                        </button>
+                        <button id="print-blank-report-button" class="px-3 py-1 bg-gray-400 hover:bg-gray-500 text-white text-sm rounded shadow focus:outline-none focus:ring-2 focus:ring-gray-300" disabled title="Wait for data to load">
+                            <i class="fas fa-print mr-1"></i> Print Blank Form
+                        </button>
+                    </div>
+                </div>
+
+                <div id="dashboard-summary" class="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Progress Overview</h3>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                        <div id="summary-progress-bar" class="bg-green-600 h-2.5 rounded-full" style="width: 0%; transition: width 0.5s ease-in-out;"></div>
+                    </div>
+                    <div class="flex justify-around text-center text-sm">
+                        <div>
+                            <span class="font-bold text-lg text-gray-800" id="summary-total">0</span>
+                            <span class="block text-xs text-gray-500">Total</span>
+                        </div>
+                        <div>
+                            <span class="font-bold text-lg text-green-600" id="summary-reviewed">0</span>
+                            <span class="block text-xs text-gray-500">Reviewed</span>
+                        </div>
+                        <div>
+                            <span class="font-bold text-lg text-orange-500" id="summary-ready">0</span>
+                            <span class="block text-xs text-gray-500">Ready</span>
+                        </div>
+                        <div>
+                            <span class="font-bold text-lg text-gray-600" id="summary-pending">0</span>
+                            <span class="block text-xs text-gray-500">Pending</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="filter-controls" class="mb-4 flex flex-col sm:flex-row gap-4 items-center">
+                    <div class="flex-grow w-full sm:w-auto">
+                        <input type="search" id="search-input" placeholder="Search competencies..." class="input-style w-full max-w-xs">
+                    </div>
+                    <div id="filter-buttons" class="flex rounded-md shadow-sm" role="group">
+                        <button type="button" class="filter-btn rounded-l-md active" data-filter="all">All</button>
+                        <button type="button" class="filter-btn" data-filter="pending">Pending</button>
+                        <button type="button" class="filter-btn" data-filter="ready">Ready</button>
+                        <button type="button" class="filter-btn rounded-r-md" data-filter="reviewed">Reviewed</button>
+                    </div>
+                    <div class="flex-grow sm:text-right">
+                        <a href="https://drive.google.com/file/d/1gnQBkawGSLShlEB7T06WUEE31MznVNsw/view?usp=sharing" target="_blank" class="text-sm text-blue-600 hover:underline"><i class="fas fa-download mr-1"></i> Apprentice Agreement</a>
+                        <span class="mx-2 text-gray-300">|</span>
+                        <a href="https://drive.google.com/drive/folders/17hhs6iuw__WugzKz6-kCFLTevaXi7m1T" target="_blank" class="text-sm text-blue-600 hover:underline"><i class="fas fa-download mr-1"></i> SLMA Standards</a>
+                    </div>
+                </div>
+
+                <div id="apprentice-competency-list" class="space-y-6">
+                    <p class="text-center text-gray-500 p-4">Loading competencies...</p>
+                </div>
+            </div>
+
+        </main>
+
+        <div id="competency-detail-modal" class="hidden fixed inset-0 modal-backdrop flex items-center justify-center p-4 transition-opacity duration-300 z-50" role="dialog" aria-modal="true" aria-labelledby="competency-detail-title">
+            <div class="bg-white p-4 sm:p-6 rounded-lg shadow-xl max-w-3xl w-full transform transition-all duration-300 scale-95 opacity-0 modal-content" id="competency-detail-modal-content">
+                <input type="hidden" id="detail-competency-id">
+                <input type="hidden" id="detail-current-status"> 
+                <input type="hidden" id="detail-mode">
+
+                <div class="flex justify-between items-start border-b pb-3 mb-4">
+                    <div>
+                        <h3 id="competency-detail-title" class="text-xl font-semibold text-gray-800">Competency Details</h3>
+                        <p class="text-sm text-gray-500 mt-1" id="competency-detail-text">Loading competency...</p>
+                        <p class="text-xs text-gray-500 mt-1">Apprentice: <span id="detail-apprentice-name-display" class="font-medium"></span></p>
+                    </div>
+                    <button type="button" id="close-detail-modal-button" class="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-400 rounded-full p-1 ml-2">
+                        <i class="fas fa-times fa-lg"></i>
+                    </button>
+                </div>
+
+                <div id="competency-detail-content-area">
+
+                    <!-- Apprentice/Mentor Description View -->
+                    <div id="apprentice-phase-content" class="space-y-4 hidden">
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-1">What this means:</h4>
+                            <p class="text-sm text-gray-600 bg-gray-50 p-2 rounded border min-h-[4em]" id="detail-what-text"></p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-1">What it looks like in practice:</h4>
+                            <p class="text-sm text-gray-600 bg-gray-50 p-2 rounded border min-h-[4em]" id="detail-looks-like-text"></p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-1">Why this is critical:</h4>
+                            <p class="text-sm text-gray-600 bg-gray-50 p-2 rounded border min-h-[4em]" id="detail-critical-text"></p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-700 mb-1">References:</h4>
+                            <p class="text-sm text-gray-600 bg-gray-50 p-2 rounded border" id="detail-reference-text"></p>
+                        </div>
+
+                        <div id="apprentice-self-assessment-section" class="pt-4 border-t">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Self-Assessment (How ready do you feel?):</label>
+                            <div id="self-rating-options" class="flex flex-wrap gap-2">
+                                <input type="radio" name="self_rating" value="1" id="self_rating_1" class="self-rating-input">
+                                <label for="self_rating_1" class="self-rating-label">1 - Need More Practice</label>
+                                <input type="radio" name="self_rating" value="2" id="self_rating_2" class="self-rating-input">
+                                <label for="self_rating_2" class="self-rating-label">2 - Almost Ready</label>
+                                <input type="radio" name="self_rating" value="3" id="self_rating_3" class="self-rating-input">
+                                <label for="self_rating_3" class="self-rating-label">3 - Ready to Perform</label>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Select a rating to enable the 'Ready for Mentor' button.</p>
+                        </div>
+
+                        <div class="flex justify-end pt-4 mt-4 border-t">
+                            <button type="button" id="ready-for-mentor-button" class="hidden px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-400 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[160px]" disabled>
+                                <span id="ready-button-text">Ready for Mentor</span>
+                                <div id="ready-spinner" class="hidden loader-small ml-2"></div>
+                            </button>
+                            <button type="button" id="mentor-proceed-to-review-button" class="hidden px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition">
+                                Continue to Mentor Review
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Mentor Rating/Signing View -->
+                    <div id="mentor-phase-content" class="hidden space-y-4">
+                        <div class="bg-blue-50 p-3 rounded border border-blue-200">
+                            <h4 class="font-semibold text-gray-700 mb-1">Apprentice Self-Assessment:</h4>
+                            <p class="text-sm text-gray-600">Rating: <span id="mentor-view-self-rating" class="font-bold">N/A</span></p>
+                        </div>
+                        
+                        <div id="mentor-rating-system-display" class="mb-4 p-3 border rounded-md bg-gray-50 text-xs">
+                            <!-- Rating system will be injected here by JavaScript -->
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="mentor-name-input" class="block text-sm font-medium text-gray-700 mb-1">Mentor Name:</label>
+                            <input type="text" id="mentor-name-input" required class="input-style w-full">
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="mentor-rating-select" class="block text-sm font-medium text-gray-700 mb-1">Mentor Rating:</label>
+                            <select id="mentor-rating-select" required class="input-style w-full">
+                                <option value="">-- Select Rating --</option>
+                                <option value="5">5 - Exceeds All Expectations</option>
+                                <option value="4">4 - Meets & Exceeds Some Expectations</option>
+                                <option value="3">3 - Meets Expectations</option>
+                                <option value="2">2 - Meets Some Expectations</option>
+                                <option value="1">1 - Does Not Meet/Meets Some Expectations</option>
+                                <option value="0">0 - Does Not Meet Expectations</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="mentor-validation-date" class="block text-sm font-medium text-gray-700 mb-1">Validation Date:</label>
+                            <input type="date" id="mentor-validation-date" class="input-style w-full">
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="mentor-comments" class="block text-sm font-medium text-gray-700 mb-1">Mentor Comments (Optional):</label>
+                            <textarea id="mentor-comments" rows="3" class="input-style w-full text-sm" placeholder="Provide feedback or observations..."></textarea>
+                        </div>
+
+                        <div id="signature-section" class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Mentor Signature:</label>
+                            <div class="signature-pad-container">
+                                <canvas id="mentor-signature-canvas"></canvas>
+                            </div>
+                            <button type="button" id="mentor-clear-signature-button" class="text-sm text-blue-600 hover:underline focus:outline-none focus:ring-1 focus:ring-blue-400 rounded px-1">Clear Signature</button>
+                        </div>
+
+                        <div class="flex justify-end pt-4 border-t space-x-3">
+                             <button type="button" id="mentor-cancel-button" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition">Cancel</button>
+                            <button type="button" id="mentor-submit-button" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition flex items-center justify-center min-w-[160px]">
+                                <span id="submit-button-text">Submit Signature</span>
+                                <div id="submit-spinner" class="hidden loader-small ml-2"></div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Read-Only Reviewed View -->
+                    <div id="reviewed-phase-content" class="hidden space-y-3 text-sm">
+                         <div class="bg-gray-50 p-3 rounded border">
+                            <h4 class="font-semibold text-gray-700 mb-1">Apprentice Self-Assessment:</h4>
+                            <p>Rating: <span id="reviewed-view-self-rating" class="font-bold">N/A</span></p>
+                         </div>
+                         <div class="bg-green-50 p-3 rounded border border-green-200">
+                            <h4 class="font-semibold text-gray-700 mb-1">Mentor Review:</h4>
+                            <p>Mentor: <span id="reviewed-view-mentor-name" class="font-bold">N/A</span></p>
+                            <p>Rating: <span id="reviewed-view-mentor-rating" class="font-bold">N/A</span></p>
+                            <p>Date: <span id="reviewed-view-date">N/A</span></p>
+                            <p>Comments: <span id="reviewed-view-comments" class="whitespace-pre-wrap">N/A</span></p> 
+                            <div class="mt-2">
+                                <p class="font-medium">Signature:</p>
+                                <img id="reviewed-view-signature" src="" alt="Mentor Signature" class="border max-h-16 mt-1 bg-white"> 
+                            </div>
+                         </div>
+                         <div class="flex justify-end pt-3 border-t mt-4">
+                             <button type="button" id="edit-validation-button" class="px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-400 transition mr-3">Edit</button>
+                             <button type="button" id="reviewed-close-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition">Close</button>
+                         </div>
+                    </div>
+
+                </div> 
+            </div>
+        </div>
+
+         <div id="report-view" class="hidden">
+             <div id="report-header">
+                 <div class="logos-left"> <img src="https://reliabilitysolutions.net/wp-content/uploads/2024/05/logo.webp" alt="Reliability Solutions Logo" style="height: 40px;"> </div>
+                 <h1>Report Title Placeholder</h1> 
+                 <div class="logos-right"> <img src="https://assets.noviams.com/novi-file-uploads/slma/structure/slma_logo_green_name_to_right_11_20_2017-1.png" alt="SLMA Logo" style="height: 40px;"> </div>
+             </div>
+             <div id="report-job-info" class="hidden"> </div>
+             <div id="report-rating-info" class="hidden"> </div>
+             <div id="report-user-info"> </div>
+             <div id="report-competency-details"> </div>
+             <div id="report-summary" class="hidden"> </div>
+         </div>
+
+    </div> 
+
+    <footer class="bg-gray-700 text-white text-xs p-4 text-center mt-8">
+        <p class="mb-2">
+            © <span id="footer-year"></span> Saw Filer Apprenticeship Program - Powered By Reliability Solutions.
+        </p>
+        <p class="text-gray-400">
+            To ensure the integrity of your records, we strongly recommend periodically printing or saving a PDF of your progress report. This application is a tracking tool, and users are responsible for maintaining their official records.
+        </p>
+    </footer>
+
+    <script>
+        let currentUser = null;
+        let competenciesData = null; 
+        let mentorSignaturePad = null; 
+        let isSaving = false;        
+        let currentSearchTerm = '';
+        let activeFilter = 'all';
+        const VALIDATOR_PLACEHOLDER = "[Validated]"; 
+
+        // --- Element Cache ---
+        const loadingEl = document.getElementById('loading');
+        const loginView = document.getElementById('login-view');
+        const registerView = document.getElementById('register-view');
+        const forgotPasswordView = document.getElementById('forgot-password-view');
+        const apprenticeDashboard = document.getElementById('apprentice-dashboard');
+        const userInfoEl = document.getElementById('user-info');
+        const userNameEl = document.getElementById('user-name');
+        const userDetailsEl = document.getElementById('user-details');
+        const logoutButton = document.getElementById('logout-button');
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const showRegisterLink = document.getElementById('show-register-link');
+        const showForgotPasswordLink = document.getElementById('show-forgot-password-link');
+        const backToLoginLinkReg = document.getElementById('back-to-login-link-reg');
+        const backToLoginLinkForgot = document.getElementById('back-to-login-link-forgot');
+        const printReportButton = document.getElementById('print-report-button'); 
+        const printBlankReportButton = document.getElementById('print-blank-report-button'); 
+        const reportViewEl = document.getElementById('report-view');
+        const reportUserInfoEl = document.getElementById('report-user-info');
+        const reportCompDetailsEl = document.getElementById('report-competency-details');
+        const reportSummaryEl = document.getElementById('report-summary');
+        const reportJobInfoEl = document.getElementById('report-job-info');
+        const reportRatingInfoEl = document.getElementById('report-rating-info');
+        
+        // Modal Elements
+        const competencyDetailModal = document.getElementById('competency-detail-modal');
+        const competencyDetailModalContent = document.getElementById('competency-detail-modal-content');
+        const detailCompetencyId = document.getElementById('detail-competency-id');
+        const detailCurrentStatus = document.getElementById('detail-current-status');
+        const detailMode = document.getElementById('detail-mode');
+        const competencyDetailTitle = document.getElementById('competency-detail-title');
+        const competencyDetailText = document.getElementById('competency-detail-text');
+        const detailApprenticeNameDisplay = document.getElementById('detail-apprentice-name-display');
+        const closeDetailModalButton = document.getElementById('close-detail-modal-button');
+        
+        // Modal Content Phases
+        const apprenticePhaseContent = document.getElementById('apprentice-phase-content');
+        const mentorPhaseContent = document.getElementById('mentor-phase-content');
+        const reviewedPhaseContent = document.getElementById('reviewed-phase-content');
+        
+        // Apprentice Phase Elements
+        const detailWhatText = document.getElementById('detail-what-text');
+        const detailLooksLikeText = document.getElementById('detail-looks-like-text');
+        const detailCriticalText = document.getElementById('detail-critical-text');
+        const detailReferenceText = document.getElementById('detail-reference-text');
+        const apprenticeSelfAssessmentSection = document.getElementById('apprentice-self-assessment-section');
+        const selfRatingOptions = document.getElementById('self-rating-options');
+        const readyForMentorButton = document.getElementById('ready-for-mentor-button');
+        const readyButtonText = document.getElementById('ready-button-text');
+        const readySpinner = document.getElementById('ready-spinner');
+        const mentorProceedToReviewButton = document.getElementById('mentor-proceed-to-review-button');
+
+        // Mentor Phase Elements
+        const mentorViewSelfRating = document.getElementById('mentor-view-self-rating');
+        const mentorNameInput = document.getElementById('mentor-name-input');
+        const mentorRatingSelect = document.getElementById('mentor-rating-select');
+        const mentorValidationDateEl = document.getElementById('mentor-validation-date');
+        const mentorComments = document.getElementById('mentor-comments');
+        const signatureSection = document.getElementById('signature-section');
+        const mentorSignatureCanvas = document.getElementById('mentor-signature-canvas');
+        const mentorClearSignatureButton = document.getElementById('mentor-clear-signature-button');
+        const mentorCancelButton = document.getElementById('mentor-cancel-button');
+        const mentorSubmitButton = document.getElementById('mentor-submit-button');
+        const submitButtonText = document.getElementById('submit-button-text');
+        const submitSpinner = document.getElementById('submit-spinner');
+        const mentorRatingSystemDisplay = document.getElementById('mentor-rating-system-display');
+        
+        // Reviewed Phase Elements
+        const reviewedViewSelfRating = document.getElementById('reviewed-view-self-rating');
+        const reviewedViewMentorName = document.getElementById('reviewed-view-mentor-name');
+        const reviewedViewMentorRating = document.getElementById('reviewed-view-mentor-rating');
+        const reviewedViewDate = document.getElementById('reviewed-view-date');
+        const reviewedViewComments = document.getElementById('reviewed-view-comments');
+        const reviewedViewSignature = document.getElementById('reviewed-view-signature');
+        const editValidationButton = document.getElementById('edit-validation-button');
+        const reviewedCloseButton = document.getElementById('reviewed-close-button');
+
+        // --- Constants & Maps ---
+        const ratingDescriptions = { 5: "Exceeds All", 4: "Meets & Exceeds", 3: "Meets Exp.", 2: "Meets Some", 1: "Needs Imprv.", 0: "Does Not Meet", null: "Pending" };
+        const ratingDescriptionsLong = { 
+            5: "Consistently exceeds performance standard established for the time in position. Achieves results above and beyond what is required. Extends themselves in their roles to exceed personally and as a team to achieve exceptional results.",
+            4: "Apprentice not only meets all expectations in a fully satisfactory way, but exceeds some of the objectives.",
+            3: "Consistently meets the performance standards established for time in position. Handles routine tasks & some unexpected situation with the usual amount of supervision. Can continue to develop with coaching, advanced training or more experience",
+            2: "Apprentice occasionally meets some of the objectives related to this goal, but does not meet others in a fully satisfactory way. This performance level generally indicates the need for additional coaching, training or other plan for performance improvements.",
+            1: "Does not consistently meet performance standards established for time in position. Requires basic training, coaching or experience to improve performance and become consistent. Additional follow-up will be necessary.",
+            0: "Clearly and repeatedly does not meet the performance standards established for time in position. Additional follow-up and specific suggestions for improvement mandatory."
+        };
+        const selfRatingDescriptions = { 1: "Need More Practice", 2: "Almost Ready", 3: "Ready to Perform", null: "Not Rated" };
+        const statusMap = {
+            pending: { tag: '⚪', class: 'status-pending', text: 'Pending' },
+            viewed: { tag: '👁️', class: 'status-viewed', text: 'Viewed' },
+            selfRated: { tag: '⭐', class: 'status-selfRated', text: 'Self-Rated' },
+            ready: { tag: '📬', class: 'status-ready', text: 'Ready for Mentor' },
+            reviewed: { tag: '✅', class: 'status-reviewed', text: 'Reviewed' }
+        };
+
+        // --- UI Functions ---
+        function showLoading() { loadingEl.classList.remove('hidden'); }
+        function hideLoading() { loadingEl.classList.add('hidden'); }
+
+        function showToast(message, type = 'info') {
+            Toastify({
+                text: message,
+                duration: type === 'error' ? 5000 : 3000,
+                gravity: "top", position: "right", stopOnFocus: true, 
+                style: { background: type === 'success' ? "#16a34a" : type === 'error' ? "#dc2626" : "#3b82f6", color: "white", borderRadius: "0.375rem", zIndex: 1000 },
+            }).showToast();
+        }
+        function showError(message) { hideLoading(); showToast(message, 'error'); }
+        function showSuccess(message) { showToast(message, 'success'); }
+
+        function updateUserInfo() {
+             if (currentUser) {
+                 userNameEl.textContent = `${currentUser.fullName || 'User'}`;
+                 userDetailsEl.textContent = `Company: ${currentUser.company || 'N/A'} | Cohort: ${currentUser.cohort || 'N/A'}`;
+                 userInfoEl.classList.remove('hidden');
+             } else {
+                 userInfoEl.classList.add('hidden');
+             }
+        }
+
+        function showView(viewId) {
+            ['login-view', 'register-view', 'forgot-password-view', 'apprentice-dashboard'].forEach(id => {
+                document.getElementById(id)?.classList.add('hidden');
+            });
+            const viewToShow = document.getElementById(viewId);
+            if(viewToShow) {
+                if (viewId === 'login-view') loginForm?.reset();
+                if (viewId === 'register-view') registerForm?.reset();
+                viewToShow.classList.remove('hidden');
+            } else {
+                showError(`Internal Error: Cannot display view (${viewId}).`);
+            }
+        }
+
+        // --- Data Handling & Rendering ---
+        function findCompetencyById(competencyId) {
+            if (!competenciesData) return null;
+            for (const category in competenciesData) {
+                const found = competenciesData[category].find(c => c && c.id === competencyId);
+                if (found) return found;
+            }
+            return null;
+        }
+
+        function renderCompetencies(competencies) {
+            const container = document.getElementById('apprentice-competency-list');
+            if (!container) return;
+            container.innerHTML = ''; 
+
+            if (!competencies || Object.keys(competencies).length === 0) {
+                container.innerHTML = '<p class="text-gray-600 p-4 text-center">No competencies found.</p>';
+                printReportButton.disabled = true;
+                printBlankReportButton.disabled = true;
+                return;
+            }
+
+            updateDashboardSummary(competencies);
+
+            const categoryOrder = ["General Competencies", "Demonstrate Safe Work Practices", "Quality Control", "Knives and Chippers", "Circular Saws", "Band Saws", "Mill Machine Set-Up"];
+            Object.keys(competencies).forEach(cat => { if (!categoryOrder.includes(cat)) categoryOrder.push(cat); });
+
+            let tippyInstances = []; 
+            categoryOrder.forEach(category => {
+                if (competencies[category]?.length > 0) {
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.className = 'mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200';
+                    categoryDiv.innerHTML = `<h3 class="text-lg font-semibold mb-3 text-indigo-700 border-b border-gray-200 pb-2">${category}</h3>`;
+                    const list = document.createElement('ul');
+                    list.className = 'space-y-3 competency-list max-h-[60vh] overflow-y-auto pr-2'; 
+
+                    competencies[category].forEach(comp => {
+                        const statusInfo = statusMap[comp.status] || statusMap.pending;
+                        let actionText = '';
+                        if (comp.status === 'reviewed' && comp.progress?.rating !== null) {
+                            const ratingKey = comp.progress.rating;
+                            const ratingBgColors = { 5: "bg-purple-600", 4: "bg-green-600", 3: "bg-blue-600", 2: "bg-yellow-400", 1: "bg-orange-500", 0: "bg-red-600" };
+                            const ratingTextColors = { 5: "text-white", 4: "text-white", 3: "text-white", 2: "text-black", 1: "text-white", 0: "text-white" };
+                            actionText = `<span class="px-2 py-0.5 rounded-full text-xs font-semibold ${ratingBgColors[ratingKey]} ${ratingTextColors[ratingKey]}"><strong class="mr-1">${ratingKey}</strong><span class="hidden sm:inline"> - ${ratingDescriptions[ratingKey]}</span></span>`;
+                        } else if (comp.status === 'ready') {
+                            actionText = `<span class="text-xs font-semibold text-orange-600 uppercase tracking-wider">READY FOR MENTOR</span>`;
+                        }
+
+                        const listItem = document.createElement('li');
+                        listItem.setAttribute('data-competency-id', comp.id);
+                        listItem.className = `flex items-center justify-between p-3 border border-gray-200 rounded-md transition duration-150 cursor-pointer hover:bg-blue-50 hover:border-blue-300`;
+                        
+                        listItem.innerHTML = `
+                            <div class="flex-grow flex items-center min-w-0">
+                                <span class="status-tag ${statusInfo.class}" data-tippy-content="${statusInfo.text}">${statusInfo.tag}</span>
+                                <span class="text-gray-800 text-sm sm:text-base break-words ml-2">${comp.text}</span>
+                            </div>
+                            <div class="action-div flex-shrink-0 flex items-center space-x-2 ml-4">${actionText}</div>`;
+                        
+                        listItem.onclick = () => showCompetencyDetailModal(findCompetencyById(comp.id));
+                        list.appendChild(listItem);
+                        tippyInstances.push(listItem.querySelector('.status-tag'));
+                    });
+                    categoryDiv.appendChild(list);
+                    container.appendChild(categoryDiv);
+                }
+            });
+            tippy(tippyInstances, { theme: 'custom-light', placement: 'top' });
+            printReportButton.disabled = false;
+            printBlankReportButton.disabled = false;
+            applyFilters();
+        }
+
+        function updateDashboardSummary(competencies) {
+            let total = 0, reviewed = 0, ready = 0;
+            for (const category in competencies) {
+                competencies[category].forEach(comp => {
+                    total++;
+                    if (comp.status === 'reviewed') reviewed++;
+                    else if (comp.status === 'ready') ready++;
+                });
+            }
+            const pending = total - reviewed - ready;
+            const percentage = total > 0 ? (reviewed / total) * 100 : 0;
+
+            document.getElementById('summary-total').textContent = total;
+            document.getElementById('summary-reviewed').textContent = reviewed;
+            document.getElementById('summary-ready').textContent = ready;
+            document.getElementById('summary-pending').textContent = pending;
+            document.getElementById('summary-progress-bar').style.width = `${percentage}%`;
+        }
+
+        function applyFilters() {
+            const listItems = document.querySelectorAll('#apprentice-competency-list li[data-competency-id]');
+            const searchTerm = currentSearchTerm.toLowerCase();
+
+            listItems.forEach(li => {
+                const compId = li.getAttribute('data-competency-id');
+                const comp = findCompetencyById(compId);
+                if (!comp) return;
+
+                const matchesFilter = activeFilter === 'all' || comp.status === activeFilter || (activeFilter === 'pending' && (comp.status === 'viewed' || comp.status === 'selfRated' || comp.status === 'pending'));
+                const matchesSearch = searchTerm === '' || comp.text.toLowerCase().includes(searchTerm);
+
+                li.style.display = (matchesFilter && matchesSearch) ? '' : 'none';
+            });
+        }
+
+        function flashListItem(competencyId) {
+            const listItem = document.querySelector(`li[data-competency-id="${competencyId}"]`);
+            if (listItem) {
+                listItem.classList.add('flash-update');
+                setTimeout(() => {
+                    listItem.classList.remove('flash-update');
+                }, 1500);
+            }
+        }
+
+        // --- Server Communication (API Calls) ---
+        function handleLogin(event) {
+            event.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            if (!email || !password) return showError("Please enter both email and password.");
+            showLoading();
+            google.script.run.withSuccessHandler(onLoginSuccess).withFailureHandler(onApiFailure).login(email, password);
+        }
+
+        function onLoginSuccess(response) {
+            if (response?.success && response.user) {
+                currentUser = response.user;
+                updateUserInfo();
+                fetchDataForUser(); 
+            } else {
+                hideLoading(); 
+                showError(response?.message || "Login failed.");
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            competenciesData = null;
+            updateUserInfo();
+            showView('login-view');
+            showToast("You have been logged out.", "info");
+        }
+
+        function fetchDataForUser() {
+            if (!currentUser?.email) return showError("User information is missing.");
+            showLoading();
+            google.script.run.withSuccessHandler(onDataFetched).withFailureHandler(onApiFailure).getCompetenciesAndProgress(currentUser.email);
+        }
+
+        function onDataFetched(response) {
+            hideLoading(); 
+            if (response?.success) {
+                competenciesData = response.competencies; 
+                renderCompetencies(competenciesData);
+                showView('apprentice-dashboard');
+            } else {
+                showError(response?.message || "Failed to fetch data after login.");
+                handleLogout(); 
+            }
+        }
+
+        function onApiFailure(error) {
+             hideLoading(); 
+             console.error("--- API FAILURE ---", error);
+             showError(error.message || "An unexpected error occurred. Check the console for details.");
+             resetActionButtons(); 
+        }
+
+        function handleRegister(event) {
+            event.preventDefault();
+            const userData = {
+                firstName: document.getElementById('reg-firstName').value.trim(),
+                lastName: document.getElementById('reg-lastName').value.trim(),
+                email: document.getElementById('reg-email').value.trim(),
+                cohort: document.getElementById('reg-cohort').value.trim(),
+                company: document.getElementById('reg-company').value.trim(),
+                password: document.getElementById('reg-password').value,
+            };
+            const confirmPassword = document.getElementById('reg-confirmPassword').value;
+
+            if (Object.values(userData).some(v => !v)) return showError("Please fill in all fields.");
+            if (userData.password !== confirmPassword) return showError("Passwords do not match.");
+            if (userData.password.length < 6) return showError("Password must be at least 6 characters.");
+            
+            showLoading();
+            google.script.run.withSuccessHandler(onRegisterSuccess).withFailureHandler(onApiFailure).registerUser(userData);
+        }
+
+        function onRegisterSuccess(response) {
+            hideLoading();
+            if (response?.success) {
+                showSuccess(response.message);
+                showView('login-view'); 
+            } else {
+                showError(response?.message || "Registration failed.");
+            }
+        }
+
+        // --- Modal Logic & Workflow ---
+        function showCompetencyDetailModal(comp) {
+            if (!comp) return showError("Could not load competency details.");
+            
+            detailCompetencyId.value = comp.id;
+            detailCurrentStatus.value = comp.status;
+            detailMode.value = 'new'; // Default to new submission
+            competencyDetailTitle.textContent = comp.text;
+            competencyDetailText.textContent = comp.text;
+            detailApprenticeNameDisplay.textContent = currentUser.fullName;
+
+            apprenticePhaseContent.classList.add('hidden');
+            mentorPhaseContent.classList.add('hidden');
+            reviewedPhaseContent.classList.add('hidden');
+            readyForMentorButton.classList.add('hidden');
+            mentorProceedToReviewButton.classList.add('hidden');
+            resetActionButtons();
+
+            if (comp.status === 'reviewed') {
+                reviewedPhaseContent.classList.remove('hidden');
+                populateReviewedView(comp.progress);
+            } else if (comp.status === 'ready') {
+                apprenticePhaseContent.classList.remove('hidden');
+                populateApprenticeView(comp);
+                apprenticeSelfAssessmentSection.classList.add('hidden');
+                mentorProceedToReviewButton.classList.remove('hidden');
+            } else {
+                apprenticePhaseContent.classList.remove('hidden');
+                populateApprenticeView(comp);
+                apprenticeSelfAssessmentSection.classList.remove('hidden');
+                readyForMentorButton.classList.remove('hidden');
+                if (comp.status === 'pending') {
+                    markCompetencyAsViewed(currentUser.email, comp.id);
+                }
+            }
+
+            competencyDetailModalContent.scrollTop = 0;
+            document.body.style.overflow = 'hidden';
+            competencyDetailModal.classList.remove('hidden');
+            anime({ targets: competencyDetailModal, opacity: [0, 1], duration: 200 });
+            anime({ targets: '#competency-detail-modal-content', scale: [0.95, 1], opacity: [0, 1], duration: 250, easing: 'easeOutQuad' });
+        }
+
+        function enterEditMode() {
+            const comp = findCompetencyById(detailCompetencyId.value);
+            if (!comp || !comp.progress) return;
+
+            detailMode.value = 'edit';
+            reviewedPhaseContent.classList.add('hidden');
+            mentorPhaseContent.classList.remove('hidden');
+            
+            populateMentorView(comp.progress, true); // Pass true for edit mode
+            initializeMentorSignaturePad();
+            requestAnimationFrame(resizeMentorCanvas);
+        }
+
+        function proceedToMentorReview() {
+            const comp = findCompetencyById(detailCompetencyId.value);
+            if (!comp) return;
+            apprenticePhaseContent.classList.add('hidden');
+            mentorPhaseContent.classList.remove('hidden');
+            populateMentorView(comp.progress, false); // Pass false for new submission
+            initializeMentorSignaturePad();
+            requestAnimationFrame(resizeMentorCanvas);
+        }
+
+        function populateApprenticeView(comp) {
+            detailWhatText.textContent = comp.what || "Not specified.";
+            detailLooksLikeText.textContent = comp.looksLike || "Not specified.";
+            detailCriticalText.textContent = comp.critical || "Not specified.";
+            detailReferenceText.textContent = comp.referenceCode || "N/A";
+            document.querySelectorAll('input[name="self_rating"]').forEach(radio => radio.checked = false);
+            readyForMentorButton.disabled = true;
+            if (comp.progress?.selfRating) {
+                const radio = document.getElementById(`self_rating_${comp.progress.selfRating}`);
+                if (radio) radio.checked = true;
+                readyForMentorButton.disabled = false;
+            }
+        }
+
+        function populateMentorView(progress, isEditMode = false) {
+            mentorViewSelfRating.textContent = progress?.selfRating ? `${progress.selfRating} - ${selfRatingDescriptions[progress.selfRating]}` : "Not Rated";
+            mentorNameInput.value = isEditMode && progress?.mentorName ? progress.mentorName : '';
+            
+            let ratingSystemHTML = '<table><thead><tr><th class="text-left">Rating System</th><th class="text-left">Description</th><th class="text-center">Points</th></tr></thead><tbody>';
+            for (const key in ratingDescriptionsLong) {
+                ratingSystemHTML += `<tr><td class="py-1 pr-2 align-top">${ratingDescriptions[key]}</td><td class="py-1 pr-2 align-top">${ratingDescriptionsLong[key]}</td><td class="py-1 text-center align-top">${key}</td></tr>`;
+            }
+            ratingSystemHTML += '</tbody></table>';
+            mentorRatingSystemDisplay.innerHTML = ratingSystemHTML;
+
+
+            if (isEditMode) {
+                mentorRatingSelect.value = progress.rating;
+                mentorComments.value = progress.comments || '';
+                mentorValidationDateEl.value = progress.dateValidatedStr ? progress.dateValidatedStr.substring(0, 10) : new Date().toISOString().substring(0, 10);
+                signatureSection.classList.add('hidden');
+                submitButtonText.textContent = 'Save Changes';
+            } else {
+                mentorRatingSelect.value = '';
+                mentorComments.value = '';
+                mentorValidationDateEl.value = new Date().toISOString().substring(0, 10);
+                signatureSection.classList.remove('hidden');
+                submitButtonText.textContent = 'Submit Signature';
+                mentorSignaturePad?.clear();
+            }
+        }
+
+        function populateReviewedView(progress) {
+            if (!progress) return;
+            reviewedViewSelfRating.textContent = progress.selfRating ? `${progress.selfRating} - ${selfRatingDescriptions[progress.selfRating]}` : "Not Rated";
+            reviewedViewMentorName.textContent = progress.mentorName || VALIDATOR_PLACEHOLDER;
+            reviewedViewMentorRating.textContent = progress.rating !== null ? `${progress.rating} - ${ratingDescriptions[progress.rating]}` : "N/A";
+            reviewedViewDate.textContent = progress.dateValidatedStr ? new Date(progress.dateValidatedStr).toLocaleDateString() : "N/A";
+            reviewedViewComments.textContent = progress.comments || "No comments provided.";
+            reviewedViewSignature.src = progress.signature || '';
+            reviewedViewSignature.classList.toggle('hidden', !progress.signature);
+        }
+
+        function hideCompetencyDetailModal() {
+            if (competencyDetailModal.classList.contains('hidden')) return;
+            const hideAnimation = () => {
+                document.body.style.overflow = '';
+                competencyDetailModal.classList.add('hidden');
+                window.removeEventListener("resize", resizeMentorCanvas);
+            };
+            anime({ targets: '#competency-detail-modal-content', scale: 0.95, opacity: 0, duration: 150 });
+            anime({ targets: competencyDetailModal, opacity: 0, duration: 200, delay: 50, complete: hideAnimation });
+        }
+
+        function initializeMentorSignaturePad() {
+            if (!mentorSignatureCanvas) return;
+            if (!mentorSignaturePad) {
+                try {
+                    mentorSignaturePad = new SignaturePad(mentorSignatureCanvas, { penColor: "rgb(0, 0, 100)", backgroundColor: 'rgb(249, 250, 251)' });
+                    window.addEventListener("resize", resizeMentorCanvas);
+                } catch (e) { showError("Failed to initialize signature pad."); }
+            }
+            mentorSignaturePad.clear();
+        }
+
+        function resizeMentorCanvas() {
+            if (!mentorSignaturePad || !mentorSignatureCanvas || mentorPhaseContent.classList.contains('hidden')) return;
+            const canvas = mentorSignatureCanvas;
+            const container = canvas.parentElement;
+            if (!container || container.offsetWidth <= 0) return;
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width = container.offsetWidth * ratio;
+            canvas.height = container.offsetHeight * ratio;
+            canvas.getContext("2d").scale(ratio, ratio);
+            mentorSignaturePad.clear();
+        }
+
+        function markCompetencyAsViewed(apprenticeEmail, competencyId) {
+            google.script.run.withSuccessHandler(response => {
+                if (response?.success) {
+                    const comp = findCompetencyById(competencyId);
+                    if(comp) {
+                        if (!comp.progress) comp.progress = {}; 
+                        comp.progress.viewedDateStr = response.viewedDate; 
+                        comp.status = 'viewed';
+                        renderCompetencies(competenciesData);
+                    }
+                }
+            }).markAsViewed(apprenticeEmail, competencyId);
+        }
+
+        function handleSelfRatingChange() {
+            const selectedRating = document.querySelector('#competency-detail-modal input[name="self_rating"]:checked');
+            readyForMentorButton.disabled = !selectedRating; 
+            const compId = detailCompetencyId.value;
+            const comp = findCompetencyById(compId);
+            if (selectedRating && comp && comp.status !== 'selfRated') {
+                 comp.status = 'selfRated'; 
+                 renderCompetencies(competenciesData);
+            }
+        }
+
+        function handleReadyForMentor() {
+            if (isSaving) return;
+            const competencyId = detailCompetencyId.value;
+            const selectedRatingInput = document.querySelector('#competency-detail-modal input[name="self_rating"]:checked');
+            if (!selectedRatingInput) return showError("Please select a self-assessment rating.");
+            
+            isSaving = true;
+            readyButtonText.textContent = 'Submitting...';
+            readySpinner.classList.remove('hidden');
+            readyForMentorButton.disabled = true; 
+
+            google.script.run
+                .withSuccessHandler(response => {
+                    isSaving = false;
+                    resetActionButtons();
+                    if (response?.success) {
+                        showSuccess("Competency marked Ready for Mentor!");
+                        fetchDataForUser();
+                        hideCompetencyDetailModal();
+                    } else {
+                        showError(response?.message || "Failed to save self-rating.");
+                        readyForMentorButton.disabled = false;
+                    }
+                })
+                .withFailureHandler(onApiFailure)
+                .saveSelfRatingAndReady(currentUser.email, competencyId, selectedRatingInput.value);
+        }
+
+        function handleFinalSubmission() {
+            if (isSaving) return;
+            if (mentorRatingSelect.value === "") return showError("Please select a mentor rating.");
+            
+            const mode = detailMode.value;
+            let dataToSave;
+            const mentorName = mentorNameInput.value.trim();
+
+            if (!mentorName) {
+                 return showError("Mentor name is required.");
+            }
+
+            isSaving = true;
+            showLoading();
+
+            if (mode === 'edit') {
+                dataToSave = {
+                    apprenticeEmail: currentUser.email,
+                    competencyId: detailCompetencyId.value,
+                    rating: parseInt(mentorRatingSelect.value, 10),
+                    comments: mentorComments.value.trim(), 
+                    manualValidationDate: mentorValidationDateEl.value,
+                    mentorName: mentorName 
+                };
+                google.script.run
+                    .withSuccessHandler(onValidationSaveSuccess) 
+                    .withFailureHandler(onApiFailure) 
+                    .updateCompetencyValidation(dataToSave);
+            } else {
+                if (mentorSignaturePad?.isEmpty()) {
+                    isSaving = false;
+                    hideLoading();
+                    return showError("Mentor signature is required.");
+                }
+                dataToSave = {
+                    apprenticeEmail: currentUser.email,
+                    competencyId: detailCompetencyId.value,
+                    rating: parseInt(mentorRatingSelect.value, 10),
+                    signatureDataUrl: mentorSignaturePad.toDataURL("image/png"),
+                    comments: mentorComments.value.trim(), 
+                    manualValidationDate: mentorValidationDateEl.value,
+                    mentorName: mentorName
+                };
+                google.script.run
+                    .withSuccessHandler(onValidationSaveSuccess) 
+                    .withFailureHandler(onApiFailure) 
+                    .saveCompetencyValidation(dataToSave);
+            }
+        }
+
+        function onValidationSaveSuccess(response) {
+            hideLoading();
+            resetActionButtons(); 
+
+            if (response?.success) {
+                showSuccess(response.message || "Validation saved!");
+                fetchDataForUser();
+            } else {
+                showError(response?.message || "Failed to save validation. Please try again.");
+            }
+            
+            hideCompetencyDetailModal();
+        }
+
+        function resetActionButtons() {
+            isSaving = false; 
+            if (readyButtonText && readySpinner && readyForMentorButton) {
+                readyButtonText.textContent = 'Ready for Mentor';
+                readySpinner.classList.add('hidden');
+                readyForMentorButton.disabled = !document.querySelector('#competency-detail-modal input[name="self_rating"]:checked');
+            }
+            if (submitButtonText && submitSpinner && mentorSubmitButton) {
+                submitButtonText.textContent = 'Submit Signature';
+                submitSpinner.classList.add('hidden');
+                mentorSubmitButton.disabled = false;
+            }
+        }
+
+        // --- PRINT & SAVE FUNCTIONS ---
+        async function generateReportElement(isBlankForm = false) {
+            if (!currentUser || !competenciesData) {
+                showError("User or competency data not available for report.");
+                return null;
+            }
+            showLoading();
+
+            const reportContainer = document.createElement('div');
+            reportContainer.innerHTML = reportViewEl.innerHTML; // Clone the structure
+
+            const userInfoEl = reportContainer.querySelector('#report-user-info');
+            const compDetailsEl = reportContainer.querySelector('#report-competency-details');
+            const summaryEl = reportContainer.querySelector('#report-summary');
+            const jobInfoEl = reportContainer.querySelector('#report-job-info');
+            const ratingInfoEl = reportContainer.querySelector('#report-rating-info');
+            
+            jobInfoEl.innerHTML = `<h2>WORK PROCESS SCHEDULE - SAW FILER</h2><p class="codes">O*NET-SOC CODE: 51-4194.00 RAPIDS CODE: 0495CB</p><p><strong>Description:</strong> Perform precision smoothing, sharpening, polishing, or grinding of metal objects.</p>`;
+            ratingInfoEl.innerHTML = `<h4>On-the-Job Learning - Rating System:</h4><table><thead><tr><th>Rating System</th><th>Description</th><th>Points</th></tr></thead><tbody><tr><td>Exceeds All Expectations</td><td>${ratingDescriptionsLong[5]}</td><td>5</td></tr><tr><td>Meets & Exceeds Some Expectations</td><td>${ratingDescriptionsLong[4]}</td><td>4</td></tr><tr><td>Meets Expectations</td><td>${ratingDescriptionsLong[3]}</td><td>3</td></tr><tr><td>Meets Some Expectations</td><td>${ratingDescriptionsLong[2]}</td><td>2</td></tr><tr><td>Does Not Meet / Meets Some Expectations</td><td>${ratingDescriptionsLong[1]}</td><td>1</td></tr><tr><td>Does Not Meet Expectations</td><td>${ratingDescriptionsLong[0]}</td><td>0</td></tr></tbody></table>`;
+            jobInfoEl.classList.remove('hidden'); 
+            ratingInfoEl.classList.remove('hidden');
+            summaryEl.classList.add('hidden'); // Always hide summary for print/save
+            
+            if (isBlankForm) {
+                userInfoEl.innerHTML = `<dl><div><dt>Name:</dt><dd class="blank-field"></dd></div><div><dt>Email:</dt><dd class="blank-field"></dd></div><div><dt>Cohort:</dt><dd class="blank-field"></dd></div><div><dt>Company:</dt><dd class="blank-field"></dd></div></dl>`;
+                compDetailsEl.innerHTML = ''; 
+                
+                const categoryOrder = ["General Competencies", "Demonstrate Safe Work Practices", "Quality Control", "Knives and Chippers", "Circular Saws", "Band Saws", "Mill Machine Set-Up"];
+                 Object.keys(competenciesData).forEach(cat => { if (!categoryOrder.includes(cat)) categoryOrder.push(cat); });
+
+                categoryOrder.forEach(category => {
+                    if (competenciesData[category]) {
+                        let tbodyHtml = '';
+                        competenciesData[category].forEach(comp => {
+                            tbodyHtml += `<tr><td class="task">${comp.text}</td><td class="mentor-rating-blank"></td><td class="date-blank"></td><td class="signature-blank"></td></tr>`;
+                        });
+                        compDetailsEl.innerHTML += `<div class="report-category-section">
+                            <h4 class="report-category-title">${category}</h4>
+                            <table class="report-table">
+                                <thead><tr><th class="task">Task</th><th class="mentor-rating-blank">Mentor Rate</th><th class="date-blank">Date</th><th class="signature-blank">Validated By (Sign)</th></tr></thead>
+                                <tbody>${tbodyHtml}</tbody>
+                            </table>
+                        </div>`;
+                    }
+                });
+
+            } else { // For Progress Report
+                userInfoEl.innerHTML = `<dl><div><dt>Name:</dt><dd>${currentUser.fullName}</dd></div><div><dt>Email:</dt><dd>${currentUser.email}</dd></div><div><dt>Cohort:</dt><dd>${currentUser.cohort || 'N/A'}</dd></div><div><dt>Company:</dt><dd>${currentUser.company || 'N/A'}</dd></div></dl>`;
+                compDetailsEl.innerHTML = '<p class="text-center p-4">Generating... Fetching signatures...</p>';
+            
+                const signaturePromises = [];
+                const reportData = [];
+                
+                Object.values(competenciesData).flat().forEach(comp => {
+                    const progress = comp.progress;
+                    const rating = (progress && typeof progress.rating === 'number') ? progress.rating : null;
+                    const dateISO = progress?.dateValidatedStr || null;
+                    const progressId = progress?.progressId || `${currentUser.email}_${comp.id}`;
+
+                    let sigPromise = Promise.resolve(null);
+                    if (rating !== null && dateISO) {
+                        sigPromise = new Promise((resolve) => {
+                            google.script.run
+                                .withSuccessHandler(r => resolve(r.signature || null))
+                                .withFailureHandler(() => resolve(null))
+                                .getSignatureForProgress(progressId);
+                        });
+                    }
+                    signaturePromises.push(sigPromise);
+                    reportData.push({ comp, rating, dateISO });
+                });
+
+                try {
+                    const signatures = await Promise.all(signaturePromises);
+                    compDetailsEl.innerHTML = '';
+
+                    const categoryHtmlMap = {};
+                    reportData.forEach((item, index) => {
+                        const { comp, rating, dateISO } = item;
+                        const dateFormatted = dateISO ? new Date(dateISO).toLocaleDateString() : '';
+                        const signatureData = signatures[index];
+                        let signatureContent = '';
+                        if (signatureData) {
+                            signatureContent = `<img src="${signatureData}" alt="Signature" style="max-height: 30px; max-width: 100px;">`;
+                        } else if (rating !== null) {
+                            signatureContent = `<span style="font-style: italic; color: #555;">[Validated]</span>`;
+                        }
+
+                        const trHtml = `<tr>
+                            <td class="task">${comp.text}</td>
+                            <td class="mentor-rating">${rating ?? ''}</td>
+                            <td class="date">${dateFormatted}</td>
+                            <td class="signature">${signatureContent}</td>
+                        </tr>`;
+                        if (!categoryHtmlMap[comp.category]) categoryHtmlMap[comp.category] = '';
+                        categoryHtmlMap[comp.category] += trHtml;
+                    });
+
+                    const categoryOrder = ["General Competencies", "Demonstrate Safe Work Practices", "Quality Control", "Knives and Chippers", "Circular Saws", "Band Saws", "Mill Machine Set-Up"];
+                     Object.keys(competenciesData).forEach(cat => { if (!categoryOrder.includes(cat)) categoryOrder.push(cat); });
+
+
+                    categoryOrder.forEach(category => {
+                        if (categoryHtmlMap[category]) {
+                            compDetailsEl.innerHTML += `<div class="report-category-section">
+                                <h4 class="report-category-title">${category}</h4>
+                                <table class="report-table">
+                                    <thead><tr><th class="task">Task</th><th class="mentor-rating">Mentor Rate</th><th class="date">Date</th><th class="signature">Validated By</th></tr></thead>
+                                    <tbody>${categoryHtmlMap[category]}</tbody>
+                                </table>
+                            </div>`;
+                        }
+                    });
+                } catch (error) {
+                    console.error("Error generating report:", error);
+                    showError("Failed to generate report. Could not fetch signatures.");
+                    hideLoading();
+                    return null;
+                }
+            }
+            hideLoading();
+            return reportContainer;
+        }
+        
+        async function handlePrintReport(isBlankForm = false) {
+            const reportElement = await generateReportElement(isBlankForm);
+            if (reportElement) {
+                const tempReportView = document.createElement('div');
+                tempReportView.innerHTML = reportElement.innerHTML;
+                tempReportView.classList.add('hidden'); 
+                document.body.appendChild(tempReportView);
+                
+                reportViewEl.innerHTML = tempReportView.innerHTML; 
+                reportViewEl.classList.remove('hidden');
+
+                setTimeout(() => {
+                    window.print();
+                    reportViewEl.classList.add('hidden');
+                    tempReportView.remove();
+                }, 300);
+            }
+        }
+        
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('footer-year').textContent = new Date().getFullYear();
+            showView('login-view'); 
+            updateUserInfo(); 
+
+            // Main navigation
+            showRegisterLink.addEventListener('click', (e) => { e.preventDefault(); showView('register-view'); });
+            showForgotPasswordLink.addEventListener('click', (e) => { e.preventDefault(); showView('forgot-password-view'); });
+            backToLoginLinkReg.addEventListener('click', (e) => { e.preventDefault(); showView('login-view'); });
+            backToLoginLinkForgot.addEventListener('click', (e) => { e.preventDefault(); showView('login-view'); });
+            loginForm.addEventListener('submit', handleLogin);
+            registerForm.addEventListener('submit', handleRegister);
+            logoutButton.addEventListener('click', handleLogout);
+            
+            // Dashboard buttons
+            printReportButton.addEventListener('click', () => handlePrintReport(false));
+            printBlankReportButton.addEventListener('click', () => handlePrintReport(true));
+
+            // --- ROBUST EVENT LISTENERS USING EVENT DELEGATION ---
+            
+            // Main competency modal
+            competencyDetailModal.addEventListener('click', (e) => {
+                const target = e.target;
+                if (target.closest('#close-detail-modal-button') || target === competencyDetailModal) {
+                    hideCompetencyDetailModal();
+                } else if (target.closest('#ready-for-mentor-button')) {
+                    handleReadyForMentor();
+                } else if (target.closest('#mentor-proceed-to-review-button')) {
+                    proceedToMentorReview();
+                } else if (target.closest('#mentor-clear-signature-button')) {
+                    mentorSignaturePad?.clear();
+                } else if (target.closest('#mentor-submit-button')) {
+                    handleFinalSubmission();
+                } else if (target.closest('#mentor-cancel-button') || target.closest('#reviewed-close-button')) {
+                    hideCompetencyDetailModal();
+                } else if (target.closest('#edit-validation-button')) {
+                    enterEditMode();
+                }
+            });
+            selfRatingOptions.addEventListener('change', handleSelfRatingChange);
+
+            // Filter and Search Listeners
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                currentSearchTerm = e.target.value;
+                applyFilters();
+            });
+            document.getElementById('filter-buttons').addEventListener('click', (e) => {
+                const button = e.target.closest('.filter-btn');
+                if (button) {
+                    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    activeFilter = button.dataset.filter;
+                    applyFilters();
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
+<!--
+   – --- End of index.html ---  
+-->
