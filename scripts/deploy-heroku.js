@@ -47,11 +47,40 @@ console.log('\n🔧 Setting environment variables...');
 execSync('heroku config:set NODE_ENV=production', { stdio: 'inherit' });
 execSync('heroku config:set SESSION_SECRET=' + (process.env.SESSION_SECRET || 'your-super-secret-session-key-change-this-in-production'), { stdio: 'inherit' });
 
-// Deploy to Heroku
+// Check current branch and deploy to Heroku
 console.log('\n🚀 Deploying to Heroku...');
 execSync('git add .', { stdio: 'inherit' });
-execSync('git commit -m "Deploy to Heroku" || echo "No changes to commit"', { stdio: 'inherit' });
-execSync('git push heroku main || git push heroku master', { stdio: 'inherit' });
+
+try {
+    execSync('git commit -m "Deploy to Heroku"', { stdio: 'inherit' });
+} catch (error) {
+    console.log('ℹ️  No changes to commit');
+}
+
+// Get current branch name
+let currentBranch;
+try {
+    currentBranch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
+} catch (error) {
+    currentBranch = 'main';
+}
+
+console.log(`📤 Pushing ${currentBranch} branch to Heroku...`);
+
+try {
+    execSync(`git push heroku ${currentBranch}:main`, { stdio: 'inherit' });
+} catch (error) {
+    console.error('\n❌ Git push failed. This might be due to:');
+    console.error('   1. Git version compatibility (Heroku requires Git 2.40+)');
+    console.error('   2. Authentication issues');
+    console.error('   3. Network connectivity');
+    console.error('\n💡 Solutions:');
+    console.error('   1. Update Git: brew install git (on macOS)');
+    console.error('   2. Try manual deployment:');
+    console.error(`      git push heroku ${currentBranch}:main`);
+    console.error('   3. Check Heroku login: heroku auth:whoami');
+    process.exit(1);
+}
 
 // Run database setup on Heroku
 console.log('\n🗄️  Setting up database on Heroku...');
