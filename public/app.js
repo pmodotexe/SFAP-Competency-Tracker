@@ -126,9 +126,30 @@ function updateUserInfo() {
          userNameEl.textContent = `${currentUser.fullName || 'User'}`;
          userDetailsEl.textContent = `Company: ${currentUser.company || 'N/A'} | Cohort: ${currentUser.cohort || 'N/A'}`;
          userInfoEl.classList.remove('hidden');
+         
+         // Show admin panel button for admin users
+         const adminButton = document.getElementById('admin-panel-button');
+         if (adminButton && isAdminUser(currentUser.email)) {
+             adminButton.classList.remove('hidden');
+         } else if (adminButton) {
+             adminButton.classList.add('hidden');
+         }
      } else {
          userInfoEl.classList.add('hidden');
+         const adminButton = document.getElementById('admin-panel-button');
+         if (adminButton) {
+             adminButton.classList.add('hidden');
+         }
      }
+}
+
+// Check if user has admin privileges
+function isAdminUser(email) {
+    const adminEmails = [
+        'paolomorales@reliabilitysolutions.net',
+        'jeremysymonds@reliabilitysolutions.net'
+    ];
+    return adminEmails.includes(email);
 }
 
 function showView(viewId) {
@@ -852,6 +873,14 @@ document.addEventListener('DOMContentLoaded', () => {
     registerForm.addEventListener('submit', handleRegister);
     logoutButton.addEventListener('click', handleLogout);
     
+    // Admin panel button
+    const adminPanelButton = document.getElementById('admin-panel-button');
+    if (adminPanelButton) {
+        adminPanelButton.addEventListener('click', () => {
+            window.open('/admin.html', '_blank');
+        });
+    }
+
     // Dashboard buttons
     printReportButton.addEventListener('click', () => handlePrintReport(false));
     printBlankReportButton.addEventListener('click', () => handlePrintReport(true));

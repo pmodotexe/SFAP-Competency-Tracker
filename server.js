@@ -122,6 +122,13 @@ function initializeDatabase() {
                 FOREIGN KEY (competencyId) REFERENCES competencies(id)
             )`);
 
+            // Admins table
+            db.run(`CREATE TABLE IF NOT EXISTS admins (
+                email TEXT PRIMARY KEY,
+                createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (email) REFERENCES users(email)
+            )`);
+
             resolve();
         });
     });
@@ -491,6 +498,383 @@ app.get('/api/competencies/list', requireAuth, (req, res) => {
         });
 
         res.json({ success: true, competencies: competenciesData });
+    });
+});
+
+// Admin middleware - check if user has admin privileges
+function requireAdmin(req, res, next) {
+    if (!req.session.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const adminEmails = [
+        'paolomorales@reliabilitysolutions.net',
+        'jeremysymonds@reliabilitysolutions.net'
+    ];
+    
+    // Check if user is built-in admin or added admin
+    const isBuiltInAdmin = adminEmails.includes(req.session.user.email);
+    
+    if (isBuiltInAdmin) {
+        return next();
+    }
+    
+    // Check if user is in admins table
+    db.get('SELECT * FROM admins WHERE email = ?', [req.session.user.email], (err, admin) => {
+        if (err || !admin) {
+            return res.status(403).json({ error: 'Admin privileges required' });
+        }
+        next();
+    });
+}
+
+// Get current user info
+app.get('/api/user', requireAuth, (req, res) => {
+    res.json(req.session.user);
+});
+
+// Admin API Routes
+
+// Get all users
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+    const query = `
+        SELECT u.*,
+               COUNT(p.id) as totalProgress,
+               COUNT(CASE WHEN p.rating IS NOT NULL THEN 1 END) as completedProgress,
+               ROUND((COUNT(CASE WHEN p.rating IS NOT NULL THEN 1 END) * 100.0 /
+                     (SELECT COUNT(*) FROM competencies)), 2) as progressPercentage
+        FROM users u
+        LEFT JOIN progress p ON u.email = p.apprenticeEmail
+        GROUP BY u.email
+        ORDER BY u.lastName, u.firstName
+    `;
+    
+    db.all(query, (err, users) => {
+        if (err) {
+            console.error('Error fetching users:', err);
+            return res.status(500).json({ error: 'Failed to fetch users' });
+        }
+        
+        res.json(users);
+    });
+});
+
+// Create new user
+app.post('/api/admin/users', requireAdmin, async (req, res) => {
+    const { firstName, lastName, email, company, cohort, role } = req.body;
+    
+    if (!firstName || !lastName || !email) {
+        return res.status(400).json({ error: 'First name, last name, and email are required' });
+    }
+    
+    try {
+        // Generate random password
+        const tempPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        
+        db.run(
+            'INSERT INTO users (firstName, lastName, email, password, company, cohort, role) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [firstName, lastName, email, hashedPassword, company, cohort, role || 'Apprentice'],
+            function(err) {
+                if (err) {
+                    if (err.code === 'SQLITE_CONSTRAINT') {
+                        return res.status(409).json({ error: 'User with this email already exists' });
+                    }
+                    console.error('Error creating user:', err);
+                    return res.status(500).json({ error: 'Failed to create user' });
+                }
+                
+                res.json({
+                    success: true,
+                    message: 'User created successfully',
+                    tempPassword: tempPassword
+                });
+            }
+        );
+    } catch (error) {
+        console.error('Error hashing password:', error);
+        res.status(500).json({ error: 'Failed to create user' });
+    }
+});
+
+// Update user
+app.put('/api/admin/users/:email', requireAdmin, (req, res) => {
+    const { email } = req.params;
+    const { firstName, lastName, email: newEmail, company, cohort, role } = req.body;
+    
+    db.run(
+        'UPDATE users SET firstName = ?, lastName = ?, email = ?, company = ?, cohort = ?, role = ? WHERE email = ?',
+        [firstName, lastName, newEmail, company, cohort, role, email],
+        function(err) {
+            if (err) {
+                console.error('Error updating user:', err);
+                return res.status(500).json({ error: 'Failed to update user' });
+            }
+            
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            res.json({ success: true, message: 'User updated successfully' });
+        }
+    );
+});
+
+// Delete user
+app.delete('/api/admin/users/:email', requireAdmin, (req, res) => {
+    const { email } = req.params;
+    
+    db.serialize(() => {
+        // Delete user's progress first
+        db.run('DELETE FROM progress WHERE apprenticeEmail = ?', [email]);
+        
+        // Delete user
+        db.run('DELETE FROM users WHERE email = ?', [email], function(err) {
+            if (err) {
+                console.error('Error deleting user:', err);
+                return res.status(500).json({ error: 'Failed to delete user' });
+            }
+            
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            res.json({ success: true, message: 'User deleted successfully' });
+        });
+    });
+});
+
+// Reset user password
+app.post('/api/admin/users/:email/reset-password', requireAdmin, async (req, res) => {
+    const { email } = req.params;
+    
+    try {
+        const newPassword = Math.random().toString(36).slice(-8);
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        
+        db.run('UPDATE users SET password = ? WHERE email = ?', [hashedPassword, email], function(err) {
+            if (err) {
+                console.error('Error resetting password:', err);
+                return res.status(500).json({ error: 'Failed to reset password' });
+            }
+            
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+            
+            res.json({ success: true, newPassword: newPassword });
+        });
+    } catch (error) {
+        console.error('Error hashing password:', error);
+        res.status(500).json({ error: 'Failed to reset password' });
+    }
+});
+
+// Get progress overview
+app.get('/api/admin/progress-overview', requireAdmin, (req, res) => {
+    const queries = {
+        totalUsers: 'SELECT COUNT(*) as count FROM users',
+        totalCompetencies: 'SELECT COUNT(*) as count FROM competencies',
+        userProgress: `
+            SELECT u.email, u.firstName, u.lastName, u.company,
+                   COUNT(p.id) as totalProgress,
+                   COUNT(CASE WHEN p.rating IS NOT NULL THEN 1 END) as completed,
+                   COUNT(CASE WHEN p.rating IS NULL AND p.selfRating IS NOT NULL THEN 1 END) as inProgress,
+                   ((SELECT COUNT(*) FROM competencies) - COUNT(p.id)) as notStarted,
+                   ROUND((COUNT(CASE WHEN p.rating IS NOT NULL THEN 1 END) * 100.0 /
+                         (SELECT COUNT(*) FROM competencies)), 2) as progressPercentage
+            FROM users u
+            LEFT JOIN progress p ON u.email = p.apprenticeEmail
+            GROUP BY u.email
+            ORDER BY progressPercentage DESC, u.lastName
+        `
+    };
+    
+    db.get(queries.totalUsers, (err, totalUsersResult) => {
+        if (err) return res.status(500).json({ error: 'Failed to fetch data' });
+        
+        db.get(queries.totalCompetencies, (err, totalCompetenciesResult) => {
+            if (err) return res.status(500).json({ error: 'Failed to fetch data' });
+            
+            db.all(queries.userProgress, (err, userProgress) => {
+                if (err) return res.status(500).json({ error: 'Failed to fetch data' });
+                
+                const totalCompetencies = totalCompetenciesResult.count;
+                const totalUsers = totalUsersResult.count;
+                
+                // Calculate aggregate stats
+                let completedCompetencies = 0;
+                let inProgressCompetencies = 0;
+                let notStartedCompetencies = 0;
+                
+                userProgress.forEach(user => {
+                    completedCompetencies += user.completed;
+                    inProgressCompetencies += user.inProgress;
+                    notStartedCompetencies += user.notStarted;
+                });
+                
+                res.json({
+                    totalUsers,
+                    completedCompetencies,
+                    inProgressCompetencies,
+                    notStartedCompetencies,
+                    userProgress
+                });
+            });
+        });
+    });
+});
+
+// Get admins
+app.get('/api/admin/admins', requireAdmin, (req, res) => {
+    db.all(`
+        SELECT a.email, u.firstName, u.lastName, a.createdAt
+        FROM admins a
+        JOIN users u ON a.email = u.email
+        ORDER BY a.createdAt DESC
+    `, (err, admins) => {
+        if (err) {
+            console.error('Error fetching admins:', err);
+            return res.status(500).json({ error: 'Failed to fetch admins' });
+        }
+        
+        res.json(admins);
+    });
+});
+
+// Add admin
+app.post('/api/admin/admins', requireAdmin, (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    // Check if user exists
+    db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
+        if (err) {
+            console.error('Error checking user:', err);
+            return res.status(500).json({ error: 'Failed to check user' });
+        }
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // Add to admins table
+        db.run('INSERT INTO admins (email) VALUES (?)', [email], function(err) {
+            if (err) {
+                if (err.code === 'SQLITE_CONSTRAINT') {
+                    return res.status(409).json({ error: 'User is already an admin' });
+                }
+                console.error('Error adding admin:', err);
+                return res.status(500).json({ error: 'Failed to add admin' });
+            }
+            
+            res.json({ success: true, message: 'Admin added successfully' });
+        });
+    });
+});
+
+// Remove admin
+app.delete('/api/admin/admins/:email', requireAdmin, (req, res) => {
+    const { email } = req.params;
+    
+    db.run('DELETE FROM admins WHERE email = ?', [email], function(err) {
+        if (err) {
+            console.error('Error removing admin:', err);
+            return res.status(500).json({ error: 'Failed to remove admin' });
+        }
+        
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Admin not found' });
+        }
+        
+        res.json({ success: true, message: 'Admin removed successfully' });
+    });
+});
+
+// Export users CSV
+app.get('/api/admin/export/users', requireAdmin, (req, res) => {
+    db.all(`
+        SELECT u.firstName, u.lastName, u.email, u.company, u.cohort, u.role, u.createdAt,
+               COUNT(p.id) as totalProgress,
+               COUNT(CASE WHEN p.rating IS NOT NULL THEN 1 END) as completedProgress
+        FROM users u
+        LEFT JOIN progress p ON u.email = p.apprenticeEmail
+        GROUP BY u.email
+        ORDER BY u.lastName, u.firstName
+    `, (err, users) => {
+        if (err) {
+            console.error('Error exporting users:', err);
+            return res.status(500).json({ error: 'Failed to export users' });
+        }
+        
+        // Generate CSV
+        const headers = ['First Name', 'Last Name', 'Email', 'Company', 'Cohort', 'Role', 'Created At', 'Total Progress', 'Completed'];
+        const csvRows = [headers.join(',')];
+        
+        users.forEach(user => {
+            const row = [
+                user.firstName,
+                user.lastName,
+                user.email,
+                user.company || '',
+                user.cohort || '',
+                user.role || 'Apprentice',
+                new Date(user.createdAt).toLocaleDateString(),
+                user.totalProgress,
+                user.completedProgress
+            ];
+            csvRows.push(row.map(field => `"${field}"`).join(','));
+        });
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="users-export.csv"');
+        res.send(csvRows.join('\n'));
+    });
+});
+
+// Export progress CSV
+app.get('/api/admin/export/progress', requireAdmin, (req, res) => {
+    db.all(`
+        SELECT u.firstName, u.lastName, u.email, u.company, c.category, c.text, c.referenceCode,
+               p.rating, p.dateValidated, p.mentorName, p.comments, p.selfRating
+        FROM users u
+        CROSS JOIN competencies c
+        LEFT JOIN progress p ON u.email = p.apprenticeEmail AND c.id = p.competencyId
+        ORDER BY u.lastName, u.firstName, c.category, c.id
+    `, (err, progress) => {
+        if (err) {
+            console.error('Error exporting progress:', err);
+            return res.status(500).json({ error: 'Failed to export progress' });
+        }
+        
+        // Generate CSV
+        const headers = ['First Name', 'Last Name', 'Email', 'Company', 'Category', 'Competency', 'Reference Code', 'Rating', 'Date Validated', 'Mentor', 'Comments', 'Self Rating'];
+        const csvRows = [headers.join(',')];
+        
+        progress.forEach(item => {
+            const row = [
+                item.firstName,
+                item.lastName,
+                item.email,
+                item.company || '',
+                item.category,
+                item.text,
+                item.referenceCode || '',
+                item.rating || '',
+                item.dateValidated ? new Date(item.dateValidated).toLocaleDateString() : '',
+                item.mentorName || '',
+                item.comments || '',
+                item.selfRating || ''
+            ];
+            csvRows.push(row.map(field => `"${field}"`).join(','));
+        });
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="progress-export.csv"');
+        res.send(csvRows.join('\n'));
     });
 });
 

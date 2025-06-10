@@ -83,6 +83,13 @@ function initializeDatabase() {
                 FOREIGN KEY (apprenticeEmail) REFERENCES users(email),
                 FOREIGN KEY (competencyId) REFERENCES competencies(id)
             )`);
+
+            // Admins table
+            db.run(`CREATE TABLE IF NOT EXISTS admins (
+                email TEXT PRIMARY KEY,
+                createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (email) REFERENCES users(email)
+            )`);
         });
         
         db.close((err) => {

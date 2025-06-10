@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - SFAP Competency Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastify-js/1.12.0/toastify.min.js"></script>
+    <style>
+        .admin-tab.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .admin-table th {
+            background-color: #f3f4f6;
+            font-weight: 600;
+        }
+        .admin-table td, .admin-table th {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-blue-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <h1 class="text-2xl font-bold">SFAP Admin Panel</h1>
+                <div class="flex items-center space-x-4">
+                    <span id="admin-user-name" class="text-blue-100"></span>
+                    <button id="switch-to-apprentice" class="bg-blue-500 hover:bg-blue-400 px-4 py-2 rounded">
+                        Switch to Apprentice View
+                    </button>
+                    <button id="admin-logout" class="bg-red-500 hover:bg-red-400 px-4 py-2 rounded">
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="container mx-auto px-4">
+            <div class="flex space-x-1">
+                <button class="admin-tab active px-6 py-3 font-medium" data-tab="users">Users</button>
+                <button class="admin-tab px-6 py-3 font-medium" data-tab="progress">Progress Overview</button>
+                <button class="admin-tab px-6 py-3 font-medium" data-tab="admins">Admin Management</button>
+                <button class="admin-tab px-6 py-3 font-medium" data-tab="reports">Reports</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-6">
+        <!-- Users Tab -->
+        <div id="users-tab" class="admin-content">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-semibold">User Management</h2>
+                    <button id="add-user-btn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+                        Add New User
+                    </button>
+                </div>
+                
+                <!-- Search and Filter -->
+                <div class="mb-4 flex space-x-4">
+                    <input type="text" id="user-search" placeholder="Search users..." 
+                           class="flex-1 px-3 py-2 border rounded-lg">
+                    <select id="company-filter" class="px-3 py-2 border rounded-lg">
+                        <option value="">All Companies</option>
+                    </select>
+                    <select id="cohort-filter" class="px-3 py-2 border rounded-lg">
+                        <option value="">All Cohorts</option>
+                    </select>
+                </div>
+
+                <!-- Users Table -->
+                <div class="overflow-x-auto">
+                    <table class="admin-table w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Name</th>
+                                <th class="text-left">Email</th>
+                                <th class="text-left">Company</th>
+                                <th class="text-left">Cohort</th>
+                                <th class="text-left">Role</th>
+                                <th class="text-left">Progress</th>
+                                <th class="text-left">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                            <!-- Users will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Overview Tab -->
+        <div id="progress-tab" class="admin-content hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-6">Progress Overview</h2>
+                
+                <!-- Progress Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <h3 class="font-semibold text-blue-800">Total Users</h3>
+                        <p id="total-users" class="text-2xl font-bold text-blue-600">0</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <h3 class="font-semibold text-green-800">Completed Competencies</h3>
+                        <p id="completed-competencies" class="text-2xl font-bold text-green-600">0</p>
+                    </div>
+                    <div class="bg-yellow-50 p-4 rounded-lg">
+                        <h3 class="font-semibold text-yellow-800">In Progress</h3>
+                        <p id="in-progress-competencies" class="text-2xl font-bold text-yellow-600">0</p>
+                    </div>
+                    <div class="bg-red-50 p-4 rounded-lg">
+                        <h3 class="font-semibold text-red-800">Not Started</h3>
+                        <p id="not-started-competencies" class="text-2xl font-bold text-red-600">0</p>
+                    </div>
+                </div>
+
+                <!-- Detailed Progress Table -->
+                <div class="overflow-x-auto">
+                    <table class="admin-table w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-left">User</th>
+                                <th class="text-left">Company</th>
+                                <th class="text-left">Completed</th>
+                                <th class="text-left">In Progress</th>
+                                <th class="text-left">Not Started</th>
+                                <th class="text-left">Overall Progress</th>
+                                <th class="text-left">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="progress-table-body">
+                            <!-- Progress data will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Management Tab -->
+        <div id="admins-tab" class="admin-content hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-semibold">Admin Management</h2>
+                    <button id="add-admin-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                        Add Admin
+                    </button>
+                </div>
+
+                <!-- Current Admins -->
+                <div class="overflow-x-auto">
+                    <table class="admin-table w-full">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Name</th>
+                                <th class="text-left">Email</th>
+                                <th class="text-left">Added Date</th>
+                                <th class="text-left">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admins-table-body">
+                            <!-- Admins will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reports Tab -->
+        <div id="reports-tab" class="admin-content hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-6">Reports</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="border rounded-lg p-4">
+                        <h3 class="font-semibold mb-3">Export User Data</h3>
+                        <p class="text-gray-600 mb-4">Export all user information and progress data</p>
+                        <button id="export-users-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
+                            Export Users CSV
+                        </button>
+                    </div>
+                    
+                    <div class="border rounded-lg p-4">
+                        <h3 class="font-semibold mb-3">Progress Report</h3>
+                        <p class="text-gray-600 mb-4">Generate detailed progress report for all users</p>
+                        <button id="export-progress-btn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+                            Export Progress CSV
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <!-- User Edit Modal -->
+    <div id="user-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg max-w-md w-full p-6">
+                <h3 id="user-modal-title" class="text-lg font-semibold mb-4">Edit User</h3>
+                <form id="user-form">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">First Name</label>
+                            <input type="text" id="user-first-name" class="w-full px-3 py-2 border rounded-lg" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Last Name</label>
+                            <input type="text" id="user-last-name" class="w-full px-3 py-2 border rounded-lg" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Email</label>
+                            <input type="email" id="user-email" class="w-full px-3 py-2 border rounded-lg" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Company</label>
+                            <input type="text" id="user-company" class="w-full px-3 py-2 border rounded-lg" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Cohort</label>
+                            <input type="text" id="user-cohort" class="w-full px-3 py-2 border rounded-lg" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Role</label>
+                            <select id="user-role" class="w-full px-3 py-2 border rounded-lg">
+                                <option value="Apprentice">Apprentice</option>
+                                <option value="Mentor">Mentor</option>
+                                <option value="Supervisor">Supervisor</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" id="cancel-user-modal" class="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                            Save
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Add Modal -->
+    <div id="admin-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg max-w-md w-full p-6">
+                <h3 class="text-lg font-semibold mb-4">Add Admin</h3>
+                <form id="admin-form">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Email</label>
+                            <input type="email" id="admin-email" class="w-full px-3 py-2 border rounded-lg" 
+                                   placeholder="user@reliabilitysolutions.net" required>
+                            <p class="text-sm text-gray-500 mt-1">Must be an existing user in the system</p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" id="cancel-admin-modal" class="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                            Add Admin
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+</html>
