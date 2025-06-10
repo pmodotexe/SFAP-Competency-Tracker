@@ -83,8 +83,8 @@ try {
 }
 
 // Run database setup on Heroku
-console.log('\n🗄️  Setting up database on Heroku...');
-execSync('heroku run npm run setup', { stdio: 'inherit' });
+console.log('\n🗄️  Setting up database and importing competencies on Heroku...');
+execSync('heroku run npm run setup:production', { stdio: 'inherit' });
 
 console.log('\n✅ Deployment complete!');
 console.log(`🌐 Your app is available at: https://${appName}.herokuapp.com`);

@@ -85,17 +85,16 @@ tar -czf app.tar.gz --exclude=node_modules --exclude=.git .
 heroku builds:create --source-tar app.tar.gz
 ```
 
-#### 7. Set up the database
+#### 7. Set up the database and import competencies
 
 ```bash
-heroku run npm run setup
+heroku run npm run setup:production
 ```
 
-#### 8. Import competency data
-
-```bash
-heroku run node scripts/import-csv-robust.js
-```
+This single command will:
+- Initialize the database with all required tables
+- Import all competency data from the CSV file
+- Set up the application for production use
 
 ## Verification Steps
 

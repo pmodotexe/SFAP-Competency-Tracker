@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "setup": "node scripts/setup.js",
+    "setup:production": "node scripts/setup-production.js",
     "import-competencies": "node scripts/import-competencies.js",
     "excel-to-json": "node scripts/excel-to-json.js",
     "deploy:github": "node scripts/deploy-github-pages.js",
