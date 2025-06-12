@@ -84,12 +84,73 @@ function setupEventListeners() {
     // Export buttons
     document.getElementById('export-users-btn').addEventListener('click', exportUsers);
     document.getElementById('export-progress-btn').addEventListener('click', exportProgress);
+    document.getElementById('export-by-company-btn').addEventListener('click', exportByCompany);
+    document.getElementById('generate-custom-report').addEventListener('click', generateCustomReport);
+    
+    // Report type change handler
+    document.getElementById('report-type').addEventListener('change', handleReportTypeChange);
     
     // Modal handlers
     document.getElementById('cancel-user-modal').addEventListener('click', closeUserModal);
     document.getElementById('cancel-admin-modal').addEventListener('click', closeAdminModal);
     document.getElementById('user-form').addEventListener('submit', handleUserSubmit);
     document.getElementById('admin-form').addEventListener('submit', handleAdminSubmit);
+    
+    // Event delegation for dynamically created buttons
+    setupTableEventDelegation();
+}
+
+// Setup event delegation for table buttons
+function setupTableEventDelegation() {
+    // Users table event delegation
+    document.getElementById('users-table-body').addEventListener('click', (e) => {
+        const button = e.target.closest('button');
+        if (!button) return;
+        
+        const email = button.dataset.email;
+        const action = button.dataset.action;
+        
+        switch(action) {
+            case 'edit':
+                editUser(email);
+                break;
+            case 'report':
+                generateUserReport(email);
+                break;
+            case 'reset-password':
+                resetPassword(email);
+                break;
+            case 'delete':
+                deleteUser(email);
+                break;
+        }
+    });
+    
+    // Progress table event delegation
+    document.getElementById('progress-table-body').addEventListener('click', (e) => {
+        const button = e.target.closest('button');
+        if (!button) return;
+        
+        const email = button.dataset.email;
+        const action = button.dataset.action;
+        
+        if (action === 'view-progress') {
+            viewUserProgress(email);
+        }
+    });
+    
+    // Admins table event delegation
+    document.getElementById('admins-table-body').addEventListener('click', (e) => {
+        const button = e.target.closest('button');
+        if (!button) return;
+        
+        const email = button.dataset.email;
+        const action = button.dataset.action;
+        
+        if (action === 'remove-admin') {
+            removeAdmin(email);
+        }
+    });
 }
 
 // Switch between tabs
@@ -164,11 +225,11 @@ function displayUsers(users) {
                 <span class="text-sm text-gray-600">${user.progressPercentage || 0}%</span>
             </td>
             <td>
-                <div class="flex space-x-2">
-                    <button onclick="editUser('${user.email}')" class="text-blue-600 hover:text-blue-800">Edit</button>
-                    <button onclick="viewUserProgress('${user.email}')" class="text-green-600 hover:text-green-800">Progress</button>
-                    <button onclick="resetPassword('${user.email}')" class="text-yellow-600 hover:text-yellow-800">Reset Password</button>
-                    <button onclick="deleteUser('${user.email}')" class="text-red-600 hover:text-red-800">Delete</button>
+                <div class="flex flex-wrap gap-1">
+                    <button data-email="${user.email}" data-action="edit" class="text-blue-600 hover:text-blue-800 text-sm px-2 py-1 border rounded">Edit</button>
+                    <button data-email="${user.email}" data-action="report" class="text-green-600 hover:text-green-800 text-sm px-2 py-1 border rounded">Report</button>
+                    <button data-email="${user.email}" data-action="reset-password" class="text-yellow-600 hover:text-yellow-800 text-sm px-2 py-1 border rounded">Reset Pwd</button>
+                    <button data-email="${user.email}" data-action="delete" class="text-red-600 hover:text-red-800 text-sm px-2 py-1 border rounded">Delete</button>
                 </div>
             </td>
         `;
@@ -261,7 +322,7 @@ function displayProgressTable(userProgress) {
                 <span class="text-sm text-gray-600">${user.progressPercentage}%</span>
             </td>
             <td>
-                <button onclick="viewUserProgress('${user.email}')" class="text-blue-600 hover:text-blue-800">
+                <button data-email="${user.email}" data-action="view-progress" class="text-blue-600 hover:text-blue-800">
                     View Details
                 </button>
             </td>
@@ -317,7 +378,7 @@ function displayAdmins() {
             <td>${admin.email}</td>
             <td>${new Date(admin.createdAt).toLocaleDateString()}</td>
             <td>
-                <button onclick="removeAdmin('${admin.email}')" class="text-red-600 hover:text-red-800">
+                <button data-email="${admin.email}" data-action="remove-admin" class="text-red-600 hover:text-red-800">
                     Remove
                 </button>
             </td>
@@ -434,17 +495,20 @@ async function handleAdminSubmit(e) {
     }
 }
 
-// Admin action functions
-window.editUser = function(email) {
+// Admin action functions - Define them globally
+function editUser(email) {
+    console.log('Edit user clicked:', email);
     openUserModal(email);
-};
+}
 
-window.viewUserProgress = function(email) {
+function viewUserProgress(email) {
+    console.log('View progress clicked:', email);
     // Redirect to user progress view
     window.open(`/user-progress.html?email=${encodeURIComponent(email)}`, '_blank');
-};
+}
 
-window.resetPassword = async function(email) {
+async function resetPassword(email) {
+    console.log('Reset password clicked:', email);
     if (!confirm(`Reset password for ${email}?`)) return;
     
     try {
@@ -461,9 +525,10 @@ window.resetPassword = async function(email) {
         console.error('Error resetting password:', error);
         showError('Failed to reset password');
     }
-};
+}
 
-window.deleteUser = async function(email) {
+async function deleteUser(email) {
+    console.log('Delete user clicked:', email);
     if (!confirm(`Delete user ${email}? This action cannot be undone.`)) return;
     
     try {
@@ -481,9 +546,10 @@ window.deleteUser = async function(email) {
         console.error('Error deleting user:', error);
         showError('Failed to delete user');
     }
-};
+}
 
-window.removeAdmin = async function(email) {
+async function removeAdmin(email) {
+    console.log('Remove admin clicked:', email);
     if (!confirm(`Remove admin privileges for ${email}?`)) return;
     
     try {
@@ -500,7 +566,14 @@ window.removeAdmin = async function(email) {
         console.error('Error removing admin:', error);
         showError('Failed to remove admin');
     }
-};
+}
+
+// Also attach to window object for compatibility
+window.editUser = editUser;
+window.viewUserProgress = viewUserProgress;
+window.resetPassword = resetPassword;
+window.deleteUser = deleteUser;
+window.removeAdmin = removeAdmin;
 
 // Export functions
 async function exportUsers() {
@@ -566,3 +639,183 @@ function showError(message) {
         backgroundColor: "#ef4444",
     }).showToast();
 }
+// Custom reporting functions
+function handleReportTypeChange() {
+    const reportType = document.getElementById('report-type').value;
+    
+    // Hide all select divs
+    document.getElementById('user-select-div').classList.add('hidden');
+    document.getElementById('cohort-select-div').classList.add('hidden');
+    document.getElementById('company-select-div').classList.add('hidden');
+    
+    // Show relevant select div and populate options
+    switch(reportType) {
+        case 'individual':
+            document.getElementById('user-select-div').classList.remove('hidden');
+            populateUserSelect();
+            break;
+        case 'cohort':
+            document.getElementById('cohort-select-div').classList.remove('hidden');
+            populateCohortSelect();
+            break;
+        case 'company':
+            document.getElementById('company-select-div').classList.remove('hidden');
+            populateCompanySelect();
+            break;
+    }
+}
+
+function populateUserSelect() {
+    const userSelect = document.getElementById('user-select');
+    userSelect.innerHTML = '<option value="">Choose a user...</option>';
+    
+    allUsers.forEach(user => {
+        const option = document.createElement('option');
+        option.value = user.email;
+        option.textContent = `${user.firstName} ${user.lastName} (${user.email})`;
+        userSelect.appendChild(option);
+    });
+}
+
+function populateCohortSelect() {
+    const cohortSelect = document.getElementById('cohort-select');
+    const cohorts = [...new Set(allUsers.map(u => u.cohort).filter(Boolean))];
+    
+    cohortSelect.innerHTML = '<option value="">Choose a cohort...</option>';
+    cohorts.forEach(cohort => {
+        const option = document.createElement('option');
+        option.value = cohort;
+        option.textContent = cohort;
+        cohortSelect.appendChild(option);
+    });
+}
+
+function populateCompanySelect() {
+    const companySelect = document.getElementById('company-select');
+    const companies = [...new Set(allUsers.map(u => u.company).filter(Boolean))];
+    
+    companySelect.innerHTML = '<option value="">Choose a company...</option>';
+    companies.forEach(company => {
+        const option = document.createElement('option');
+        option.value = company;
+        option.textContent = company;
+        companySelect.appendChild(option);
+    });
+}
+
+async function generateCustomReport() {
+    const reportType = document.getElementById('report-type').value;
+    const reportFormat = document.getElementById('report-format').value;
+    
+    let filterValue = '';
+    let filterType = reportType;
+    
+    switch(reportType) {
+        case 'individual':
+            filterValue = document.getElementById('user-select').value;
+            if (!filterValue) {
+                showError('Please select a user');
+                return;
+            }
+            break;
+        case 'cohort':
+            filterValue = document.getElementById('cohort-select').value;
+            if (!filterValue) {
+                showError('Please select a cohort');
+                return;
+            }
+            break;
+        case 'company':
+            filterValue = document.getElementById('company-select').value;
+            if (!filterValue) {
+                showError('Please select a company');
+                return;
+            }
+            break;
+        case 'all':
+            filterValue = 'all';
+            break;
+    }
+    
+    try {
+        const response = await fetch(`/api/admin/custom-report?type=${filterType}&value=${encodeURIComponent(filterValue)}&format=${reportFormat}`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) throw new Error('Failed to generate custom report');
+        
+        const blob = await response.blob();
+        const filename = `${reportType}-${filterValue || 'all'}-${reportFormat}-report.csv`;
+        downloadFile(blob, filename);
+        
+        showSuccess('Custom report generated successfully');
+    } catch (error) {
+        console.error('Error generating custom report:', error);
+        showError('Failed to generate custom report');
+    }
+}
+
+async function generateUserReport(email) {
+    try {
+        const response = await fetch(`/api/admin/custom-report?type=individual&value=${encodeURIComponent(email)}&format=detailed`, {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) throw new Error('Failed to generate user report');
+        
+        const blob = await response.blob();
+        const user = allUsers.find(u => u.email === email);
+        const filename = `${user?.firstName || 'user'}-${user?.lastName || 'report'}-detailed.csv`;
+        downloadFile(blob, filename);
+        
+        showSuccess('User report generated successfully');
+    } catch (error) {
+        console.error('Error generating user report:', error);
+        showError('Failed to generate user report');
+    }
+}
+
+async function exportByCompany() {
+    try {
+        const response = await fetch('/api/admin/export/by-company', {
+            credentials: 'include'
+        });
+        
+        if (!response.ok) throw new Error('Failed to export by company');
+        
+        const blob = await response.blob();
+        downloadFile(blob, 'company-breakdown-report.csv');
+        
+        showSuccess('Company report exported successfully');
+    } catch (error) {
+        console.error('Error exporting by company:', error);
+        showError('Failed to export company report');
+    }
+}
+
+// Make sure generateUserReport is also globally accessible
+function generateUserReport(email) {
+    console.log('Generate user report clicked:', email);
+    try {
+        const response = fetch(`/api/admin/custom-report?type=individual&value=${encodeURIComponent(email)}&format=detailed`, {
+            credentials: 'include'
+        }).then(response => {
+            if (!response.ok) throw new Error('Failed to generate user report');
+            return response.blob();
+        }).then(blob => {
+            const user = allUsers.find(u => u.email === email);
+            const filename = `${user?.firstName || 'user'}-${user?.lastName || 'report'}-detailed.csv`;
+            downloadFile(blob, filename);
+            showSuccess('User report generated successfully');
+        }).catch(error => {
+            console.error('Error generating user report:', error);
+            showError('Failed to generate user report');
+        });
+    } catch (error) {
+        console.error('Error generating user report:', error);
+        showError('Failed to generate user report');
+    }
+}
+
+// Attach all functions to window object
+window.generateUserReport = generateUserReport;

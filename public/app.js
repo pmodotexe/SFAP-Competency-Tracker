@@ -21,10 +21,13 @@ const userDetailsEl = document.getElementById('user-details');
 const logoutButton = document.getElementById('logout-button');
 const loginForm = document.getElementById('login-form');
 const registerForm = document.getElementById('register-form');
+const forgotPasswordForm = document.getElementById('forgot-password-form');
+const resetPasswordForm = document.getElementById('reset-password-form');
 const showRegisterLink = document.getElementById('show-register-link');
 const showForgotPasswordLink = document.getElementById('show-forgot-password-link');
 const backToLoginLinkReg = document.getElementById('back-to-login-link-reg');
 const backToLoginLinkForgot = document.getElementById('back-to-login-link-forgot');
+const backToLoginFromReset = document.getElementById('back-to-login-from-reset');
 const printReportButton = document.getElementById('print-report-button'); 
 const printBlankReportButton = document.getElementById('print-blank-report-button'); 
 const reportViewEl = document.getElementById('report-view');
@@ -41,7 +44,6 @@ const detailCompetencyId = document.getElementById('detail-competency-id');
 const detailCurrentStatus = document.getElementById('detail-current-status');
 const detailMode = document.getElementById('detail-mode');
 const competencyDetailTitle = document.getElementById('competency-detail-title');
-const competencyDetailText = document.getElementById('competency-detail-text');
 const detailApprenticeNameDisplay = document.getElementById('detail-apprentice-name-display');
 const closeDetailModalButton = document.getElementById('close-detail-modal-button');
 
@@ -225,7 +227,8 @@ function renderCompetencies(competencies) {
                     </div>
                     <div class="action-div flex-shrink-0 flex items-center space-x-2 ml-4">${actionText}</div>`;
                 
-                listItem.onclick = () => showCompetencyDetailModal(findCompetencyById(comp.id));
+                listItem.setAttribute('data-competency-id', comp.id);
+                listItem.classList.add('competency-item');
                 list.appendChild(listItem);
                 tippyInstances.push(listItem.querySelector('.status-tag'));
             });
@@ -414,6 +417,62 @@ async function handleRegister(event) {
     }
 }
 
+async function handleForgotPassword(event) {
+    event.preventDefault();
+    const email = document.getElementById('forgot-email').value.trim();
+    
+    if (!email) return showError("Please enter your email address.");
+    
+    showLoading();
+    try {
+        const response = await apiCall('/forgot-password', {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        });
+        
+        if (response.success) {
+            showSuccess("Password reset link sent to your email address.");
+            showView('login-view');
+        } else {
+            showError(response.message || "Failed to send reset email.");
+        }
+    } catch (error) {
+        showError("Failed to send reset email. Please try again.");
+    } finally {
+        hideLoading();
+    }
+}
+
+async function handleResetPassword(event) {
+    event.preventDefault();
+    const token = document.getElementById('reset-token').value;
+    const password = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    
+    if (!password || !confirmPassword) return showError("Please fill in all fields.");
+    if (password !== confirmPassword) return showError("Passwords do not match.");
+    if (password.length < 6) return showError("Password must be at least 6 characters.");
+    
+    showLoading();
+    try {
+        const response = await apiCall('/reset-password', {
+            method: 'POST',
+            body: JSON.stringify({ token, password })
+        });
+        
+        if (response.success) {
+            showSuccess("Password updated successfully. You can now log in with your new password.");
+            showView('login-view');
+        } else {
+            showError(response.message || "Failed to reset password.");
+        }
+    } catch (error) {
+        showError("Failed to reset password. Please try again.");
+    } finally {
+        hideLoading();
+    }
+}
+
 // --- Modal Logic & Workflow ---
 function showCompetencyDetailModal(comp) {
     if (!comp) return showError("Could not load competency details.");
@@ -422,7 +481,6 @@ function showCompetencyDetailModal(comp) {
     detailCurrentStatus.value = comp.status;
     detailMode.value = 'new'; // Default to new submission
     competencyDetailTitle.textContent = comp.text;
-    competencyDetailText.textContent = comp.text;
     detailApprenticeNameDisplay.textContent = currentUser.fullName;
 
     apprenticePhaseContent.classList.add('hidden');
@@ -861,7 +919,18 @@ async function handlePrintReport(isBlankForm = false) {
 // --- Event Listeners ---
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('footer-year').textContent = new Date().getFullYear();
-    showView('login-view');
+    
+    // Check for reset token in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const resetToken = urlParams.get('token');
+    
+    if (resetToken) {
+        document.getElementById('reset-token').value = resetToken;
+        showView('reset-password-view');
+    } else {
+        showView('login-view');
+    }
+    
     updateUserInfo();
 
     // Main navigation
@@ -869,15 +938,19 @@ document.addEventListener('DOMContentLoaded', () => {
     showForgotPasswordLink.addEventListener('click', (e) => { e.preventDefault(); showView('forgot-password-view'); });
     backToLoginLinkReg.addEventListener('click', (e) => { e.preventDefault(); showView('login-view'); });
     backToLoginLinkForgot.addEventListener('click', (e) => { e.preventDefault(); showView('login-view'); });
+    backToLoginFromReset.addEventListener('click', (e) => { e.preventDefault(); showView('login-view'); });
     loginForm.addEventListener('submit', handleLogin);
     registerForm.addEventListener('submit', handleRegister);
+    forgotPasswordForm.addEventListener('submit', handleForgotPassword);
+    resetPasswordForm.addEventListener('submit', handleResetPassword);
     logoutButton.addEventListener('click', handleLogout);
     
     // Admin panel button
     const adminPanelButton = document.getElementById('admin-panel-button');
     if (adminPanelButton) {
         adminPanelButton.addEventListener('click', () => {
-            window.open('/admin.html', '_blank');
+            // Navigate in the same tab to preserve session
+            window.location.href = '/admin.html';
         });
     }
 
@@ -906,6 +979,18 @@ document.addEventListener('DOMContentLoaded', () => {
             enterEditMode();
         }
     });
+    
+    // Competency list event delegation
+    document.addEventListener('click', (e) => {
+        const competencyItem = e.target.closest('.competency-item');
+        if (competencyItem) {
+            const competencyId = competencyItem.getAttribute('data-competency-id');
+            if (competencyId) {
+                showCompetencyDetailModal(findCompetencyById(competencyId));
+            }
+        }
+    });
+    
     selfRatingOptions.addEventListener('change', handleSelfRatingChange);
 
     // Filter and Search Listeners

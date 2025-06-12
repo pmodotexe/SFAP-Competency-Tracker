@@ -7,6 +7,8 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 const rateLimit = require('express-rate-limit');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const app = express();
@@ -129,11 +131,43 @@ function initializeDatabase() {
                 FOREIGN KEY (email) REFERENCES users(email)
             )`);
 
+            // Password reset tokens table
+            db.run(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL,
+                token TEXT UNIQUE NOT NULL,
+                expiresAt DATETIME NOT NULL,
+                used BOOLEAN DEFAULT FALSE,
+                createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (email) REFERENCES users(email)
+            )`);
+
             resolve();
         });
     });
 }
 
+// Email configuration
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
+
+// Verify email configuration
+if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    transporter.verify((error, success) => {
+        if (error) {
+            console.log('Email configuration error:', error);
+        } else {
+            console.log('Email server is ready to send messages');
+        }
+    });
+} else {
+    console.log('Email configuration not found. Password reset will not work.');
+}
 
 // Authentication middleware
 function requireAuth(req, res, next) {
@@ -229,6 +263,146 @@ app.post('/api/logout', (req, res) => {
         }
         res.json({ success: true, message: 'Logged out successfully' });
     });
+});
+
+// Forgot password
+app.post('/api/forgot-password', async (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+    
+    try {
+        // Check if user exists
+        db.get('SELECT email, firstName, lastName FROM users WHERE email = ?', [email], async (err, user) => {
+            if (err) {
+                console.error('Database error:', err);
+                return res.status(500).json({ success: false, message: 'Database error' });
+            }
+            
+            if (!user) {
+                // Don't reveal if email exists or not for security
+                return res.json({ success: true, message: 'If an account with that email exists, a reset link has been sent.' });
+            }
+            
+            // Generate reset token
+            const resetToken = crypto.randomBytes(32).toString('hex');
+            const expiresAt = new Date(Date.now() + 3600000); // 1 hour from now
+            
+            // Save token to database
+            db.run(
+                'INSERT INTO password_reset_tokens (email, token, expiresAt) VALUES (?, ?, ?)',
+                [email, resetToken, expiresAt.toISOString()],
+                async function(err) {
+                    if (err) {
+                        console.error('Error saving reset token:', err);
+                        return res.status(500).json({ success: false, message: 'Failed to generate reset token' });
+                    }
+                    
+                    // Send email
+                    const resetUrl = `${req.protocol}://${req.get('host')}/?token=${resetToken}`;
+                    
+                    const mailOptions = {
+                        from: process.env.EMAIL_USER,
+                        to: email,
+                        subject: 'SFAP Competency Tracker - Password Reset',
+                        html: `
+                            <h2>Password Reset Request</h2>
+                            <p>Hello ${user.firstName} ${user.lastName},</p>
+                            <p>You requested a password reset for your SFAP Competency Tracker account.</p>
+                            <p>Click the link below to reset your password:</p>
+                            <p><a href="${resetUrl}" style="background-color: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Reset Password</a></p>
+                            <p>Or copy and paste this link into your browser:</p>
+                            <p>${resetUrl}</p>
+                            <p>This link will expire in 1 hour.</p>
+                            <p>If you didn't request this reset, please ignore this email.</p>
+                            <br>
+                            <p>Best regards,<br>SFAP Competency Tracker Team</p>
+                        `
+                    };
+                    
+                    try {
+                        await transporter.sendMail(mailOptions);
+                        res.json({ success: true, message: 'Password reset link sent to your email address.' });
+                    } catch (emailError) {
+                        console.error('Error sending email:', emailError);
+                        res.status(500).json({ success: false, message: 'Failed to send reset email' });
+                    }
+                }
+            );
+        });
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+});
+
+// Reset password
+app.post('/api/reset-password', async (req, res) => {
+    const { token, password } = req.body;
+    
+    if (!token || !password) {
+        return res.status(400).json({ success: false, message: 'Token and password are required' });
+    }
+    
+    if (password.length < 6) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+    }
+    
+    try {
+        // Find valid token
+        db.get(
+            'SELECT * FROM password_reset_tokens WHERE token = ? AND used = FALSE AND expiresAt > datetime("now")',
+            [token],
+            async (err, tokenRecord) => {
+                if (err) {
+                    console.error('Database error:', err);
+                    return res.status(500).json({ success: false, message: 'Database error' });
+                }
+                
+                if (!tokenRecord) {
+                    return res.status(400).json({ success: false, message: 'Invalid or expired reset token' });
+                }
+                
+                try {
+                    // Hash new password
+                    const hashedPassword = await bcrypt.hash(password, 10);
+                    
+                    // Update user password
+                    db.run(
+                        'UPDATE users SET password = ? WHERE email = ?',
+                        [hashedPassword, tokenRecord.email],
+                        function(err) {
+                            if (err) {
+                                console.error('Error updating password:', err);
+                                return res.status(500).json({ success: false, message: 'Failed to update password' });
+                            }
+                            
+                            // Mark token as used
+                            db.run(
+                                'UPDATE password_reset_tokens SET used = TRUE WHERE token = ?',
+                                [token],
+                                (err) => {
+                                    if (err) {
+                                        console.error('Error marking token as used:', err);
+                                    }
+                                }
+                            );
+                            
+                            res.json({ success: true, message: 'Password updated successfully' });
+                        }
+                    );
+                } catch (hashError) {
+                    console.error('Error hashing password:', hashError);
+                    res.status(500).json({ success: false, message: 'Failed to process password' });
+                }
+            }
+        );
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ success: false, message: 'Internal server error' });
+    }
 });
 
 // Get competencies and progress
@@ -874,6 +1048,201 @@ app.get('/api/admin/export/progress', requireAdmin, (req, res) => {
         
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename="progress-export.csv"');
+        res.send(csvRows.join('\n'));
+    });
+});
+
+// Custom report generator
+app.get('/api/admin/custom-report', requireAdmin, (req, res) => {
+    const { type, value, format } = req.query;
+    
+    if (!type || !format) {
+        return res.status(400).json({ error: 'Type and format are required' });
+    }
+    
+    let whereClause = '';
+    let params = [];
+    
+    // Build where clause based on type
+    switch(type) {
+        case 'individual':
+            if (!value) return res.status(400).json({ error: 'User email is required' });
+            whereClause = 'WHERE u.email = ?';
+            params = [value];
+            break;
+        case 'cohort':
+            if (!value) return res.status(400).json({ error: 'Cohort is required' });
+            whereClause = 'WHERE u.cohort = ?';
+            params = [value];
+            break;
+        case 'company':
+            if (!value) return res.status(400).json({ error: 'Company is required' });
+            whereClause = 'WHERE u.company = ?';
+            params = [value];
+            break;
+        case 'all':
+            whereClause = '';
+            params = [];
+            break;
+        default:
+            return res.status(400).json({ error: 'Invalid report type' });
+    }
+    
+    // Build query based on format
+    let query;
+    let headers;
+    
+    switch(format) {
+        case 'detailed':
+            query = `
+                SELECT u.firstName, u.lastName, u.email, u.company, u.cohort,
+                       c.category, c.text, c.referenceCode, c.what, c.looksLike, c.critical,
+                       p.rating, p.dateValidated, p.mentorName, p.comments, p.selfRating
+                FROM users u
+                CROSS JOIN competencies c
+                LEFT JOIN progress p ON u.email = p.apprenticeEmail AND c.id = p.competencyId
+                ${whereClause}
+                ORDER BY u.lastName, u.firstName, c.category, c.id
+            `;
+            headers = ['First Name', 'Last Name', 'Email', 'Company', 'Cohort', 'Category', 'Competency', 'Reference Code', 'What This Means', 'What It Looks Like', 'Why Critical', 'Rating', 'Date Validated', 'Mentor', 'Comments', 'Self Rating'];
+            break;
+            
+        case 'summary':
+            query = `
+                SELECT u.firstName, u.lastName, u.email, u.company, u.cohort,
+                       COUNT(p.id) as totalProgress,
+                       COUNT(CASE WHEN p.rating IS NOT NULL THEN 1 END) as completedProgress,
+                       COUNT(CASE WHEN p.rating IS NULL AND p.selfRating IS NOT NULL THEN 1 END) as inProgress,
+                       (SELECT COUNT(*) FROM competencies) as totalCompetencies,
+                       ROUND((COUNT(CASE WHEN p.rating IS NOT NULL THEN 1 END) * 100.0 /
+                             (SELECT COUNT(*) FROM competencies)), 2) as progressPercentage
+                FROM users u
+                LEFT JOIN progress p ON u.email = p.apprenticeEmail
+                ${whereClause}
+                GROUP BY u.email
+                ORDER BY u.lastName, u.firstName
+            `;
+            headers = ['First Name', 'Last Name', 'Email', 'Company', 'Cohort', 'Completion Summary', 'Total Competencies', 'Completed', 'In Progress', 'Not Started', 'Progress %'];
+            break;
+            
+        case 'competencies':
+            query = `
+                SELECT u.firstName, u.lastName, u.email, u.company, u.cohort,
+                       c.category, c.text, c.referenceCode,
+                       CASE WHEN p.rating IS NOT NULL THEN 'Completed'
+                            WHEN p.selfRating IS NOT NULL THEN 'In Progress'
+                            ELSE 'Not Started' END as status
+                FROM users u
+                CROSS JOIN competencies c
+                LEFT JOIN progress p ON u.email = p.apprenticeEmail AND c.id = p.competencyId
+                ${whereClause}
+                ORDER BY u.lastName, u.firstName, c.category, c.id
+            `;
+            headers = ['First Name', 'Last Name', 'Email', 'Company', 'Cohort', 'Category', 'Competency', 'Reference Code', 'Status'];
+            break;
+            
+        default:
+            return res.status(400).json({ error: 'Invalid report format' });
+    }
+    
+    db.all(query, params, (err, data) => {
+        if (err) {
+            console.error('Error generating custom report:', err);
+            return res.status(500).json({ error: 'Failed to generate custom report' });
+        }
+        
+        // Generate CSV
+        const csvRows = [headers.join(',')];
+        
+        data.forEach(item => {
+            const row = headers.map(header => {
+                let value = '';
+                
+                // Map headers to data fields
+                switch(header) {
+                    case 'First Name': value = item.firstName; break;
+                    case 'Last Name': value = item.lastName; break;
+                    case 'Email': value = item.email; break;
+                    case 'Company': value = item.company || ''; break;
+                    case 'Cohort': value = item.cohort || ''; break;
+                    case 'Category': value = item.category || ''; break;
+                    case 'Competency': value = item.text || ''; break;
+                    case 'Reference Code': value = item.referenceCode || ''; break;
+                    case 'What This Means': value = item.what || ''; break;
+                    case 'What It Looks Like': value = item.looksLike || ''; break;
+                    case 'Why Critical': value = item.critical || ''; break;
+                    case 'Rating': value = item.rating || ''; break;
+                    case 'Date Validated': value = item.dateValidated ? new Date(item.dateValidated).toLocaleDateString() : ''; break;
+                    case 'Mentor': value = item.mentorName || ''; break;
+                    case 'Comments': value = item.comments || ''; break;
+                    case 'Self Rating': value = item.selfRating || ''; break;
+                    case 'Completion Summary':
+                        const completed = item.completedProgress || 0;
+                        const total = item.totalCompetencies || 0;
+                        value = `${completed} out of ${total} competencies completed`;
+                        break;
+                    case 'Total Competencies': value = item.totalCompetencies || 0; break;
+                    case 'Completed': value = item.completedProgress || 0; break;
+                    case 'In Progress': value = item.inProgress || 0; break;
+                    case 'Not Started':
+                        const notStarted = (item.totalCompetencies || 0) - (item.completedProgress || 0) - (item.inProgress || 0);
+                        value = notStarted;
+                        break;
+                    case 'Progress %': value = item.progressPercentage || 0; break;
+                    case 'Status': value = item.status || ''; break;
+                    default: value = '';
+                }
+                
+                return value;
+            });
+            csvRows.push(row.map(field => `"${field}"`).join(','));
+        });
+        
+        const filename = `${type}-${value || 'all'}-${format}-report.csv`;
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(csvRows.join('\n'));
+    });
+});
+
+// Export by company CSV
+app.get('/api/admin/export/by-company', requireAdmin, (req, res) => {
+    db.all(`
+        SELECT u.company, u.firstName, u.lastName, u.email, u.cohort,
+               COUNT(p.id) as totalProgress,
+               COUNT(CASE WHEN p.rating IS NOT NULL THEN 1 END) as completedProgress,
+               ROUND((COUNT(CASE WHEN p.rating IS NOT NULL THEN 1 END) * 100.0 /
+                     (SELECT COUNT(*) FROM competencies)), 2) as progressPercentage
+        FROM users u
+        LEFT JOIN progress p ON u.email = p.apprenticeEmail
+        GROUP BY u.email
+        ORDER BY u.company, u.lastName, u.firstName
+    `, (err, data) => {
+        if (err) {
+            console.error('Error exporting by company:', err);
+            return res.status(500).json({ error: 'Failed to export by company' });
+        }
+        
+        // Generate CSV
+        const headers = ['Company', 'First Name', 'Last Name', 'Email', 'Cohort', 'Total Progress', 'Completed', 'Progress %'];
+        const csvRows = [headers.join(',')];
+        
+        data.forEach(item => {
+            const row = [
+                item.company || 'N/A',
+                item.firstName,
+                item.lastName,
+                item.email,
+                item.cohort || '',
+                item.totalProgress,
+                item.completedProgress,
+                item.progressPercentage
+            ];
+            csvRows.push(row.map(field => `"${field}"`).join(','));
+        });
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="company-breakdown-report.csv"');
         res.send(csvRows.join('\n'));
     });
 });

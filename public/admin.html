@@ -178,11 +178,57 @@
         <!-- Reports Tab -->
         <div id="reports-tab" class="admin-content hidden">
             <div class="bg-white rounded-lg shadow p-6">
-                <h2 class="text-xl font-semibold mb-6">Reports</h2>
+                <h2 class="text-xl font-semibold mb-6">Custom Reports</h2>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Custom Report Generator -->
+                <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                    <h3 class="font-semibold mb-4">Generate Custom Report</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Report Type</label>
+                            <select id="report-type" class="w-full px-3 py-2 border rounded-lg">
+                                <option value="individual">Individual User</option>
+                                <option value="cohort">By Cohort</option>
+                                <option value="company">By Company</option>
+                                <option value="all">All Users</option>
+                            </select>
+                        </div>
+                        <div id="user-select-div" class="hidden">
+                            <label class="block text-sm font-medium mb-2">Select User</label>
+                            <select id="user-select" class="w-full px-3 py-2 border rounded-lg">
+                                <option value="">Choose a user...</option>
+                            </select>
+                        </div>
+                        <div id="cohort-select-div" class="hidden">
+                            <label class="block text-sm font-medium mb-2">Select Cohort</label>
+                            <select id="cohort-select" class="w-full px-3 py-2 border rounded-lg">
+                                <option value="">Choose a cohort...</option>
+                            </select>
+                        </div>
+                        <div id="company-select-div" class="hidden">
+                            <label class="block text-sm font-medium mb-2">Select Company</label>
+                            <select id="company-select" class="w-full px-3 py-2 border rounded-lg">
+                                <option value="">Choose a company...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Report Format</label>
+                            <select id="report-format" class="w-full px-3 py-2 border rounded-lg">
+                                <option value="detailed">Detailed Progress</option>
+                                <option value="summary">Summary Only</option>
+                                <option value="competencies">Competencies List</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button id="generate-custom-report" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-2 rounded">
+                        Generate Custom Report
+                    </button>
+                </div>
+                
+                <!-- Quick Export Options -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="border rounded-lg p-4">
-                        <h3 class="font-semibold mb-3">Export User Data</h3>
+                        <h3 class="font-semibold mb-3">Export All Users</h3>
                         <p class="text-gray-600 mb-4">Export all user information and progress data</p>
                         <button id="export-users-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
                             Export Users CSV
@@ -190,10 +236,18 @@
                     </div>
                     
                     <div class="border rounded-lg p-4">
-                        <h3 class="font-semibold mb-3">Progress Report</h3>
+                        <h3 class="font-semibold mb-3">Export All Progress</h3>
                         <p class="text-gray-600 mb-4">Generate detailed progress report for all users</p>
                         <button id="export-progress-btn" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
                             Export Progress CSV
+                        </button>
+                    </div>
+                    
+                    <div class="border rounded-lg p-4">
+                        <h3 class="font-semibold mb-3">Export by Company</h3>
+                        <p class="text-gray-600 mb-4">Generate reports grouped by company</p>
+                        <button id="export-by-company-btn" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded">
+                            Export by Company
                         </button>
                     </div>
                 </div>
