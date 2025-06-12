@@ -265,12 +265,27 @@ app.post('/api/logout', (req, res) => {
     });
 });
 
+// Check email configuration status
+app.get('/api/email-config-status', (req, res) => {
+    const emailConfigured = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+    res.json({ emailConfigured });
+});
+
 // Forgot password
 app.post('/api/forgot-password', async (req, res) => {
     const { email } = req.body;
     
     if (!email) {
         return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+    
+    // Check if email is configured
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        return res.status(503).json({
+            success: false,
+            message: 'Email service is not configured. Please contact your administrator for password reset assistance.',
+            emailNotConfigured: true
+        });
     }
     
     try {
@@ -327,7 +342,7 @@ app.post('/api/forgot-password', async (req, res) => {
                         res.json({ success: true, message: 'Password reset link sent to your email address.' });
                     } catch (emailError) {
                         console.error('Error sending email:', emailError);
-                        res.status(500).json({ success: false, message: 'Failed to send reset email' });
+                        res.status(500).json({ success: false, message: 'Failed to send reset email. Please contact your administrator.' });
                     }
                 }
             );
